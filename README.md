@@ -70,22 +70,29 @@ kubectl --context kind-kubeui-dev -n demo run debian --image=debian:bookworm-sli
   Lists update live. ⌥⌘I shows the inspector, ⌘R reloads, ⌘N opens another window.
 - **Right-click a row** for Browse Files, Show Logs, Open Shell (Terminal), Show YAML, Describe,
   Scale, Restart, Copy Name and Delete.
-- **Double-click a pod** to open its files. Double-click other resources to open their YAML.
-- **Files window:**
-  - Drag files or folders from Finder onto the list to upload them to the folder you're viewing,
-    or onto a folder row to upload into that folder.
+- **Double-click a pod** to browse its files. Double-click other resources to show their YAML.
+- **Bottom panel:** logs, files, YAML and describe open as tabs in a panel under the list, like
+  Xcode's debug area. ⇧⌘Y shows or hides it. Tabs keep running in the background, so logs keep
+  streaming while you look at something else.
+- **Logs:** the bar at the bottom has a filter field, the container and line-count pickers, and
+  Follow, Previous, Wrap and Clear (⌘K).
+- **Files:**
+  - Folders expand in place like Finder's list view: click the triangle or double-click the folder.
+    ⌘↓ makes the selected folder the root, and ⌘↑ goes to the enclosing folder.
+  - Drag files or folders from Finder onto the list to upload them into the root, or onto a
+    folder row to upload into that folder.
   - Drag items out to Finder to download them.
   - Double-click a file to download it to a temp folder and open it.
-  - ⌘[ / ⌘] go back and forward, ⌘↑ goes to the enclosing folder, ⌘↓ opens, ⇧⌘G goes to a path,
-    ⇧⌘N creates a new folder and ⌘⌫ deletes.
-  - Pods with several containers have a container picker in the toolbar.
+  - ⌘[ / ⌘] go back and forward, ⇧⌘G goes to a path, ⇧⌘N creates a new folder and ⌘⌫ deletes.
+  - Pods with several containers, native sidecars included, have a container picker.
 
 Copying files needs `sh` and `tar` in the container, as `kubectl cp` does. Plain files can still
 be uploaded without `tar`. Distroless images aren't supported yet.
 
 ## Debug hooks
 
-Debug builds read two environment variables, used for scripted UI checks:
+Debug builds read these environment variables, used for scripted UI checks:
 
 - `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG and a view-tree dump of every window every 2 seconds.
-- `KUBEUI_OPEN=files:<namespace>/<pod>` (or `logs:…`) opens that window at launch.
+- `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch.
+- `KUBEUI_EXPAND=/etc,/usr` expands those folders in the last opened Files tab.

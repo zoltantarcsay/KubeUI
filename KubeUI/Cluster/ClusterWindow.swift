@@ -8,14 +8,27 @@ struct ClusterWindow: View {
     @State private var typedNamespace: String?
     @SceneStorage("context") private var savedContext: String?
     @SceneStorage("kind") private var savedKind: String?
+    @AppStorage("panelHeight") private var panelHeight = 300.0
 
     var body: some View {
         NavigationSplitView {
             Sidebar(model: model)
                 .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
         } detail: {
-            ResourceTable(model: model)
-                .inspector(isPresented: $showInspector) {
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    ResourceTable(model: model)
+                    if model.isPanelVisible, !model.panels.isEmpty {
+                        let height = min(max(panelHeight, 140), max(140, geo.size.height - 120))
+                        PanelArea(model: model)
+                            .frame(height: height)
+                            .overlay(alignment: .top) {
+                                PanelResizeHandle(height: $panelHeight, current: height, maxHeight: geo.size.height - 120)
+                            }
+                    }
+                }
+            }
+            .inspector(isPresented: $showInspector) {
                     InspectorView(model: model)
                         .inspectorColumnWidth(min: 260, ideal: 320, max: 480)
                 }
@@ -100,6 +113,16 @@ struct ClusterWindow: View {
         }
         ToolbarItem {
             Button {
+                model.isPanelVisible.toggle()
+            } label: {
+                Label("Panel", systemImage: "rectangle.bottomthird.inset.filled")
+            }
+            .keyboardShortcut("y", modifiers: [.command, .shift])
+            .disabled(model.panels.isEmpty)
+            .help("Show or hide the logs and files panel")
+        }
+        ToolbarItem {
+            Button {
                 showInspector.toggle()
             } label: {
                 Label("Inspector", systemImage: "sidebar.trailing")
@@ -138,6 +161,30 @@ private struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+    }
+}
+
+/// Drag target on the panel's top edge, like the divider above Xcode's debug area.
+private struct PanelResizeHandle: View {
+    @Binding var height: Double
+    let current: Double
+    let maxHeight: Double
+    @State private var start: Double?
+
+    var body: some View {
+        Color.clear
+            .frame(height: 6)
+            .contentShape(Rectangle())
+            .pointerStyle(.frameResize(position: .top))
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let base = start ?? current
+                        start = base
+                        height = min(max(base - value.translation.height, 140), maxHeight)
+                    }
+                    .onEnded { _ in start = nil }
+            )
     }
 }
 

@@ -30,6 +30,12 @@ final class ClusterModel {
     private(set) var now = Date()
 
     private(set) var client: KubeClient?
+    private var app: AppModel?
+
+    /// Tabs of the bottom panel (logs, files, YAML), like Xcode's debug area.
+    private(set) var panels: [PanelTab] = []
+    var activePanelID: String?
+    var isPanelVisible = false
     private var watchTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
 
@@ -49,6 +55,7 @@ final class ClusterModel {
     var selectedObjects: [KubeObject] { selection.compactMap { objects[$0] } }
 
     func start(app: AppModel, preferredContext: String?) async {
+        self.app = app
         clockTask?.cancel()
         clockTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -149,5 +156,28 @@ final class ClusterModel {
     func stop() {
         watchTask?.cancel()
         clockTask?.cancel()
+        for tab in panels { tab.stop() }
+    }
+
+    var activePanel: PanelTab? { panels.first { $0.id == activePanelID } }
+
+    /// Shows the request's tab, reusing an open one for the same pod/resource.
+    func openPanel(_ request: PanelTab.Request) {
+        if !panels.contains(where: { $0.id == request.id }) {
+            guard let app else { return }
+            panels.append(PanelTab(request, app: app))
+        }
+        activePanelID = request.id
+        isPanelVisible = true
+    }
+
+    func closePanel(_ id: String) {
+        guard let index = panels.firstIndex(where: { $0.id == id }) else { return }
+        panels[index].stop()
+        panels.remove(at: index)
+        if activePanelID == id {
+            activePanelID = panels.isEmpty ? nil : panels[min(index, panels.count - 1)].id
+        }
+        if panels.isEmpty { isPanelVisible = false }
     }
 }

@@ -36,19 +36,26 @@ Same mechanism as `kubectl cp`, so it needs `sh` and `tar` in the container (plu
   gives byte-accurate progress, cancellation, and no macOS `._*` AppleDouble files. `.DS_Store` is skipped.
 - **Download / drag out to Finder:** `kubectl exec … -- tar -cf - -C <parent> <name>` piped into the
   local `/usr/bin/tar -x`, driven by an `NSFilePromiseProvider` so Finder gets a real file promise.
-- The table is an `NSTableView` (wrapped for SwiftUI): SwiftUI `Table` only reports an insertion
-  index for drops and can't vend file promises, while Finder-like behaviour needs "drop onto a
-  folder row" and drag-out.
+- The list is an `NSOutlineView` (wrapped for SwiftUI): SwiftUI `Table` only reports an insertion
+  index for drops and can't vend file promises, while Finder-like behaviour needs expandable folders,
+  "drop into this folder" and drag-out.
 
 ## UI layout
 
-- **Cluster window** (one per context, ⌘N for another): `NavigationSplitView` with a Finder-style
-  sidebar of resource kinds, a sortable `Table` in the content area, and an inspector (⌥⌘I) with
-  metadata, labels and quick actions. Toolbar: context picker, namespace picker, search.
-- **Pod files window** per pod/container: back/forward, path bar, upload / new folder / download,
-  transfer progress bar.
-- **Logs window** per pod/container: streaming `kubectl logs -f`.
-- **Text window** for YAML and `describe`.
+Modelled on Xcode's workspace window: a navigator on the left, the main content in the middle,
+a context-following inspector on the right, and a bottom area for output.
+
+- **Sidebar:** Finder-style list of resource kinds.
+- **Content:** sortable, live `Table` of the selected kind. The toolbar has the context and namespace
+  pickers and a search field.
+- **Inspector (⌥⌘I):** follows the selection and shows metadata, containers, labels and annotations.
+- **Bottom panel (⇧⌘Y):** like Xcode's debug area, a pane under the list with a drag handle; its height is
+  remembered. Logs, Files, YAML and Describe open as tabs, and opening the same item again reuses its
+  tab. Each tab's model outlives tab switches, so log streams and transfers keep running.
+  - **Logs:** follows Xcode's console, with output on top and a bottom bar holding the filter field
+    and output options. Lines are syntax-highlighted.
+  - **Files:** Finder's list view in an `NSOutlineView`. Folders expand in place and are listed
+    lazily on first expand. A back/forward/up bar sits above and a path bar below.
 - Shell opens Terminal.app with `kubectl exec -it`.
 
 Destructive actions (delete, scale, restart, deleting pod files) always confirm and name the context.

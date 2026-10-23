@@ -5,10 +5,10 @@ import SwiftUI
 
 /// Debug-build hooks for scripted UI checks without screen-recording permission:
 /// `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG of every window every 2s;
-/// `KUBEUI_OPEN=files:<namespace>/<pod>` or `logs:<namespace>/<pod>` opens that window at launch.
+/// `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch;
+/// `KUBEUI_EXPAND=/etc,/usr` expands folders in the last opened Files tab.
 struct DebugHooks: ViewModifier {
     let model: ClusterModel
-    @Environment(\.openWindow) private var openWindow
     private static var started = false
 
     func body(content: Content) -> some View {
@@ -18,13 +18,19 @@ struct DebugHooks: ViewModifier {
                 Self.started = true
                 Task { await Self.snapshotLoop(URL(fileURLWithPath: dir)) }
             }
-            guard let spec = env["KUBEUI_OPEN"], let context = model.context, let client = model.client else { return }
-            let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
-            let path = parts.last?.split(separator: "/").map(String.init) ?? []
-            guard parts.count == 2, path.count == 2,
-                  let pod = try? await client.get(.pods, name: path[1], namespace: path[0]) else { return }
-            let ref = PodRef(context: context, namespace: path[0], pod: path[1], containers: pod.containerNames)
-            openWindow(id: parts[0], value: ref)
+            guard let specs = env["KUBEUI_OPEN"], let context = model.context, let client = model.client else { return }
+            for spec in specs.split(separator: ",") {
+                let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
+                let path = parts.last?.split(separator: "/").map(String.init) ?? []
+                guard parts.count == 2, path.count == 2,
+                      let pod = try? await client.get(.pods, name: path[1], namespace: path[0]) else { continue }
+                let ref = PodRef(context: context, namespace: path[0], pod: path[1], containers: pod.containerNames)
+                model.openPanel(parts[0] == "logs" ? .logs(ref) : .files(ref))
+            }
+            if let expand = env["KUBEUI_EXPAND"], case .files(let files)? = model.activePanel?.content {
+                try? await Task.sleep(for: .seconds(3))
+                for path in expand.split(separator: ",") { files.setExpanded(String(path), true) }
+            }
         }
     }
 

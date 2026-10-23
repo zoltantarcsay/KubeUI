@@ -3,7 +3,6 @@ import SwiftUI
 
 struct ResourceTable: View {
     @Bindable var model: ClusterModel
-    @Environment(\.openWindow) private var openWindow
     @State private var pendingDelete: [KubeObject] = []
     @State private var pendingRestart: KubeObject?
     @State private var scaleTarget: KubeObject?
@@ -119,7 +118,8 @@ struct ResourceTable: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(.bar)
+        .background(.background)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private func objects(_ ids: Set<String>) -> [KubeObject] {
@@ -176,16 +176,16 @@ struct ResourceTable: View {
     }
 
     private func openFiles(_ pod: KubeObject) {
-        if let ref = podRef(pod) { openWindow(id: "files", value: ref) }
+        if let ref = podRef(pod) { model.openPanel(.files(ref)) }
     }
 
     private func openLogs(_ pod: KubeObject) {
-        if let ref = podRef(pod) { openWindow(id: "logs", value: ref) }
+        if let ref = podRef(pod) { model.openPanel(.logs(ref)) }
     }
 
     private func openText(_ object: KubeObject, _ mode: TextTarget.Mode) {
         guard let context = model.context else { return }
-        openWindow(id: "text", value: TextTarget(context: context, kindID: model.kind.id, name: object.name, namespace: object.namespace, mode: mode))
+        model.openPanel(.text(TextTarget(context: context, kindID: model.kind.id, name: object.name, namespace: object.namespace, mode: mode)))
     }
 
     private func openShell(_ pod: KubeObject, container: String?) {
