@@ -1,4 +1,12 @@
-# KubeUI
+<p align="center">
+  <img src="KubeUI/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="128" height="128" alt="KubeUI app icon">
+</p>
+
+<h1 align="center">KubeUI</h1>
+
+<p align="center">
+  <a href="https://github.com/zoltantarcsay/KubeUI/actions/workflows/tests.yml"><img src="https://github.com/zoltantarcsay/KubeUI/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+</p>
 
 A native macOS app for working with Kubernetes clusters. It browses resources k9s-style, has a
 Finder-style file browser for pods with drag & drop, and layers Argo CD and your GitOps repo on

@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+
+      # Integration tests need a cluster and skip themselves without KUBEUI_TEST_CONTEXT.
+      - name: KubeKit tests
+        working-directory: KubeKit
+        run: swift test
+
+      - name: Build app (Debug)
+        run: xcodebuild -project KubeUI.xcodeproj -scheme KubeUI -configuration Debug -derivedDataPath build/DerivedData build
+
+      - name: Build app (Release)
+        run: xcodebuild -project KubeUI.xcodeproj -scheme KubeUI -configuration Release -derivedDataPath build/DerivedData build
