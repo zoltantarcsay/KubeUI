@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sets up an Argo CD + GitOps playground in the kind cluster created per the README:
+# Sets up an Argo CD + GitOps playground in the kind cluster from the wiki's Local Playground page:
 # Argo CD, an in-cluster git server, a seeded repo shaped like a typical ApplicationSet-based GitOps repo,
 # and an ApplicationSet generating two apps. Usage: setup.sh <local clone dir>
 # Safe to re-run; an existing repo or clone is reused, not re-seeded.
