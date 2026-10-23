@@ -89,9 +89,9 @@ final class AppModel {
     }
 }
 
-/// Opens a YAML or describe window.
-struct TextTarget: Codable, Hashable {
-    enum Mode: String, Codable { case yaml, describe }
+/// What a YAML or describe panel shows.
+struct TextTarget: Hashable {
+    enum Mode: String { case yaml, describe }
     let context: String
     let kindID: String
     let name: String

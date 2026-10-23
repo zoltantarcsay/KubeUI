@@ -112,12 +112,6 @@ public struct ArgoApplication: Sendable, Identifiable, Hashable {
         autoSync = !raw["spec.syncPolicy.automated"].isNull
         applicationSet = raw["metadata.ownerReferences"].array.first { $0["kind"].string == "ApplicationSet" }?["name"].string
     }
-
-    /// True once Argo has synced `sha` (full or abbreviated) and the sync operation finished.
-    public func hasDeployed(_ sha: String) -> Bool {
-        syncedRevisions.contains { $0.hasPrefix(sha) || sha.hasPrefix($0) } && syncStatus == "Synced"
-            && (operation == nil || operation?.phase == "Succeeded")
-    }
 }
 
 public extension KubeClient {
@@ -137,17 +131,5 @@ public extension KubeClient {
     func sync(_ app: ArgoApplication) async throws {
         let patch = #"{"operation":{"initiatedBy":{"username":"kubeui"},"sync":{"syncStrategy":{"hook":{}}}}}"#
         _ = try await kubectl.run(args(["patch", "applications.argoproj.io", app.name, "--type", "merge", "-p", patch], namespace: app.namespace))
-    }
-
-    /// Pods selected by a managed workload, via its own label selector.
-    func pods(selectedBy workload: ArgoApplication.Resource) async throws -> [KubeObject] {
-        guard let kind = ResourceKind.all.first(where: { $0.title.dropLast() == workload.kind || $0.id.hasPrefix(workload.kind.lowercased() + "s") }),
-              let namespace = workload.namespace else { return [] }
-        let object = try await get(kind, name: workload.name, namespace: namespace)
-        let labels = object.raw["spec.selector.matchLabels"].object.compactMapValues(\.string)
-        guard !labels.isEmpty else { return [] }
-        let selector = labels.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
-        let data = try await kubectl.run(args(["get", "pods", "-l", selector, "-o", "json"], namespace: namespace))
-        return try JSONValue.parse(data)["items"].array.map(KubeObject.init)
     }
 }

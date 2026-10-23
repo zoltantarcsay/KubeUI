@@ -152,19 +152,9 @@ public struct YAMLEdit: Sendable {
         scan().first { $0.path == path }
     }
 
-    /// Line index of the mapping key at `path`, if present.
-    public func find(_ path: [String]) -> Int? {
-        entry(path)?.line
-    }
-
     /// Direct children of the mapping at `path` (the root when empty).
     public func entries(_ path: [String]) -> [Entry] {
         scan().filter { $0.path.count == path.count + 1 && Array($0.path.dropLast()) == path }
-    }
-
-    /// Every path to a key named `name` holding a mapping.
-    public func mappingPaths(named name: String) -> [[String]] {
-        scan().filter { $0.key == name && $0.kind == .mapping }.map(\.path)
     }
 
     /// Sets `key` under the mapping at `path` to a string, quoting as needed and keeping the

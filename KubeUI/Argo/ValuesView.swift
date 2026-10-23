@@ -8,7 +8,7 @@ struct ValuesView: View {
     let model: ArgoAppModel
     let showChanges: () -> Void
     @State private var selection: ValueNode.ID?
-    @State private var search = ""
+    @State private var search = DebugHooks.valuesSearch
     @State private var editing: ValueEdit?
 
     struct ValueEdit: Identifiable {

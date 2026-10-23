@@ -57,7 +57,6 @@ struct ClusterWindow: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .focusedSceneValue(\.clusterModel, model)
         .debugHooks(model)
     }
 
@@ -193,6 +192,3 @@ private struct PanelResizeHandle: View {
     }
 }
 
-extension FocusedValues {
-    @Entry var clusterModel: ClusterModel?
-}

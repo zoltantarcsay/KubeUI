@@ -1,7 +1,8 @@
 # KubeUI — design notes
 
 A native macOS app (SwiftUI + AppKit where SwiftUI falls short) for browsing Kubernetes
-clusters k9s-style, with a Finder-like file browser for pod filesystems.
+clusters k9s-style, with a Finder-like file browser for pod filesystems and Argo CD + GitOps
+editing layered on top.
 
 ## How we talk to the cluster
 

@@ -69,6 +69,18 @@ import Testing
     }
 }
 
+@Suite struct KubeClientTests {
+    let client = KubeClient(kubectl: Kubectl(executable: URL(fileURLWithPath: "/usr/bin/true"), environment: [:]), context: "ctx")
+
+    @Test func scopeFlagsGoAfterTheSubcommandAndBeforeDoubleDash() {
+        #expect(client.args(["get", "pods"], allNamespaces: true) == ["get", "pods", "--context", "ctx", "--all-namespaces"])
+        #expect(client.shellArguments(pod: "p", namespace: "ns", container: "c")
+                == ["exec", "-it", "p", "--container", "c", "--context", "ctx", "--namespace", "ns",
+                    "--", "sh", "-c", "command -v bash >/dev/null && exec bash || exec sh"])
+        #expect(shellQuote("it's") == "'it'\\''s'")
+    }
+}
+
 @Suite struct ListingTests {
     @Test func parsesStatOutput() {
         let output = """

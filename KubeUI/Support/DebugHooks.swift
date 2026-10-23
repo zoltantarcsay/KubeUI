@@ -15,6 +15,8 @@ struct DebugHooks: ViewModifier {
     private static var started = false
     /// `KUBEUI_INSPECT=<namespace>/<pod>` selects that pod with the inspector shown.
     static let showsInspector = ProcessInfo.processInfo.environment["KUBEUI_INSPECT"] != nil
+    /// `KUBEUI_VALUES_SEARCH=<text>` pre-fills the Values search.
+    static let valuesSearch = ProcessInfo.processInfo.environment["KUBEUI_VALUES_SEARCH"] ?? ""
 
     func body(content: Content) -> some View {
         content.task(id: model.context) {
@@ -107,6 +109,7 @@ struct DebugHooks: ViewModifier {
 #else
 enum DebugHooks {
     static let showsInspector = false
+    static let valuesSearch = ""
 }
 #endif
 

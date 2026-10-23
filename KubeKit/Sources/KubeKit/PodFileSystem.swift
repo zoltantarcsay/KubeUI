@@ -1,7 +1,7 @@
 import Foundation
 
-/// Identifies a container's filesystem; also the value that opens a Files window.
-public struct PodRef: Sendable, Hashable, Codable {
+/// Identifies a pod (and its containers) for the Files, Logs and Shell panels.
+public struct PodRef: Sendable, Hashable {
     public let context: String
     public let namespace: String
     public let pod: String

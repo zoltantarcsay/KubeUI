@@ -21,7 +21,7 @@ import Testing
         #expect(yaml.entries(["my-app", "backend", "env"]).map(\.key) == ["LOG_LEVEL", "APP_NAME"])
         #expect(yaml.entries(["my-app", "backend", "env"])[1].value == "ACME Test")
         #expect(yaml.entries(["my-app", "backend", "env"])[0].value == "DEBUG")
-        #expect(yaml.mappingPaths(named: "env") == [["my-app", "backend", "env"], ["my-app", "ui", "env"]])
+        #expect(yaml.scan().filter { $0.key == "env" }.map(\.kind) == [.mapping, .mapping])
     }
 
     @Test func replacesValueKeepingQuotesAndComment() {
@@ -155,14 +155,71 @@ import Testing
         #expect(nodes["x.sub.k"] == nil && nodes["x.sub"]?.value == "null")
     }
 
-    @Test func detectsDeployedRevision() throws {
+    @Test func parsesApplicationStatus() throws {
         let app = try app()
-        #expect(app.hasDeployed("abc123"))
-        #expect(!app.hasDeployed("def456"))
+        #expect(app.syncedRevisions == ["abc123", "abc123"] && app.syncStatus == "Synced" && app.healthStatus == "Healthy")
+        #expect(app.applicationSet == "demo-ops-application-set" && app.sources.count == 2 && app.sources[0].ref == "values")
     }
 }
 
 @Suite struct GitRepoTests {
+    /// A clone of a local bare repo, with origin written in Argo's form and rewritten via insteadOf.
+    func makeClone() async throws -> (repo: GitRepo, root: URL) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("kubekit-git-\(UUID().uuidString)")
+        let bare = root.appendingPathComponent("remote.git"), work = root.appendingPathComponent("work")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        func git(_ args: [String], in dir: URL) throws {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            p.arguments = ["-C", dir.path] + args
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+            try p.run()
+            p.waitUntilExit()
+            #expect(p.terminationStatus == 0, "git \(args)")
+        }
+        try git(["init", "-q", "--bare", "-b", "main", bare.path], in: root)
+        try git(["init", "-q", "-b", "main"], in: work)
+        try git(["config", "user.email", "test@example.com"], in: work)
+        try git(["config", "user.name", "Test"], in: work)
+        try git(["remote", "add", "origin", "git://gitserver.example/gitops.git"], in: work)
+        try git(["config", "url.\(bare.path).insteadOf", "git://gitserver.example/gitops.git"], in: work)
+        try "a: 1\n".write(to: work.appendingPathComponent("values.yaml"), atomically: true, encoding: .utf8)
+        try git(["add", "-A"], in: work)
+        try git(["commit", "-qm", "init"], in: work)
+        try git(["push", "-q", "-u", "origin", "main"], in: work)
+        return (try await GitRepo.open(work, environment: ProcessInfo.processInfo.environment), root)
+    }
+
+    @Test func statusDiffCommitPushDiscard() async throws {
+        let (repo, root) = try await makeClone()
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try await repo.remoteURL() == "git://gitserver.example/gitops.git")
+        #expect(try await repo.currentBranch() == "main")
+
+        try "a: 2\n".write(to: repo.root.appendingPathComponent("values.yaml"), atomically: true, encoding: .utf8)
+        try "b: 1\n".write(to: repo.root.appendingPathComponent("new.yaml"), atomically: true, encoding: .utf8)
+        let changes = try await repo.status()
+        #expect(Set(changes.map(\.path)) == ["values.yaml", "new.yaml"])
+        let diff = try await repo.diff()
+        #expect(diff.contains("+a: 2") && diff.contains("+b: 1"))
+
+        let commit = try await repo.commit("set a", paths: ["values.yaml"])
+        #expect(commit.subject == "set a")
+        #expect(try await repo.aheadBehind(fetch: false)?.ahead == 1)
+        try await repo.push()
+        #expect(try await repo.aheadBehind(fetch: true)?.ahead == 0)
+
+        try await repo.discard(try await repo.status())
+        #expect(try await repo.status().isEmpty)
+    }
+
+    @Test func pullRequestURLForGitHubRemotes() {
+        #expect(GitRepo.pullRequestURL(remote: "git@github.com:org/repo.git", branch: "kubeui/x", base: "main")?.absoluteString
+                == "https://github.com/org/repo/compare/main...kubeui/x?expand=1")
+        #expect(GitRepo.pullRequestURL(remote: "git://gitserver/gitops.git", branch: "x", base: "main") == nil)
+    }
+
     @Test func comparesRepoURLs() {
         #expect(GitRepo.sameRepo("https://github.com/org/repo.git", "git@github.com:org/repo"))
         #expect(GitRepo.sameRepo("https://user:token@github.com/org/repo/", "ssh://git@github.com/org/repo.git"))

@@ -4,6 +4,8 @@ import SwiftUI
 /// Resources Argo CD manages for the app, with live workload readiness and their pods.
 struct ArgoResourcesView: View {
     let model: ArgoAppModel
+    /// Workloads start expanded so their pods are visible; this remembers the ones collapsed.
+    @State private var collapsed = Set<String>()
 
     var body: some View {
         List {
@@ -11,7 +13,10 @@ struct ArgoResourcesView: View {
                 Section(group.kind) {
                     ForEach(group.resources) { resource in
                         if let live = model.live(resource) {
-                            DisclosureGroup {
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { !collapsed.contains(resource.id) },
+                                set: { if $0 { collapsed.remove(resource.id) } else { collapsed.insert(resource.id) } }
+                            )) {
                                 ForEach(model.pods(of: live)) { pod in podRow(pod) }
                             } label: {
                                 resourceRow(resource, live: live)
