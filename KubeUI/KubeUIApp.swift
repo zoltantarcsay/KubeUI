@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct KubeUIApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var app = AppModel()
 
     var body: some Scene {
