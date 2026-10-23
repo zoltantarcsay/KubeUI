@@ -78,6 +78,7 @@ struct ArgoResourcesView: View {
         .contextMenu {
             Button("Show Logs") { model.openPanel(.logs(ref(pod))) }
             Button("Browse Files") { model.openPanel(.files(ref(pod))) }
+            Button("Open Shell") { model.openPanel(.shell(ref(pod), container: nil)) }
             Button("Show YAML") { model.openPanel(.text(TextTarget(context: model.context, kindID: "pods", name: pod.name, namespace: pod.namespace, mode: .yaml))) }
         }
         .onTapGesture(count: 2) { model.openPanel(.logs(ref(pod))) }

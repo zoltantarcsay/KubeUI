@@ -8,7 +8,8 @@ import SwiftUI
 /// `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG of every window every 2s;
 /// `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch;
 /// `KUBEUI_EXPAND=/etc,/usr` expands folders in the last opened Files tab;
-/// `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application.
+/// `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application;
+/// `KUBEUI_OPEN=shell:<namespace>/<pod>` opens a shell, typing `KUBEUI_SHELL_INPUT` (`\n` for Return).
 struct DebugHooks: ViewModifier {
     let model: ClusterModel
     private static var started = false
@@ -45,7 +46,16 @@ struct DebugHooks: ViewModifier {
                 }
                 guard let pod = try? await client.get(.pods, name: path[1], namespace: path[0]) else { continue }
                 let ref = PodRef(context: context, namespace: path[0], pod: path[1], containers: pod.containerNames)
-                model.openPanel(parts[0] == "logs" ? .logs(ref) : .files(ref))
+                switch parts[0] {
+                case "logs": model.openPanel(.logs(ref))
+                case "shell":
+                    model.openPanel(.shell(ref, container: nil))
+                    if let input = env["KUBEUI_SHELL_INPUT"], case .shell(let shell)? = model.activePanel?.content {
+                        try? await Task.sleep(for: .seconds(4))
+                        shell.terminal.send(txt: input.replacingOccurrences(of: "\\n", with: "\n"))
+                    }
+                default: model.openPanel(.files(ref))
+                }
             }
             if let expand = env["KUBEUI_EXPAND"], case .files(let files)? = model.activePanel?.content {
                 try? await Task.sleep(for: .seconds(3))

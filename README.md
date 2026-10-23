@@ -3,7 +3,9 @@
 A native macOS app for working with Kubernetes clusters: k9s-style resource browsing and a
 Finder-style file browser for pods, with drag & drop upload and download.
 
-Requires macOS 15+, Xcode 26+ and `kubectl` on your machine. Design notes and the reasoning
+Requires macOS 15+, Xcode 26+ and `kubectl` on your machine. The only third-party dependency is
+[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (MIT) for the shell panel, pinned to 1.11.x;
+later releases add a Metal renderer that needs Xcode's separately downloaded Metal Toolchain. Design notes and the reasoning
 behind using `kubectl` as the transport are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Layout
@@ -69,13 +71,16 @@ kubectl --context kind-kubeui-dev -n demo run debian --image=debian:bookworm-sli
 
 - **Cluster window:** pick a context and namespace in the toolbar and a resource kind in the sidebar.
   Lists update live. ⌥⌘I shows the inspector, ⌘R reloads, ⌘N opens another window.
-- **Right-click a row** for Browse Files, Show Logs, Open Shell (Terminal), Show YAML, Describe,
-  Scale, Restart, Copy Name and Delete.
+- **Right-click a row** for Browse Files, Show Logs, Open Shell, Open Shell in Terminal, Show YAML,
+  Describe, Scale, Restart, Copy Name and Delete.
 - **Double-click a pod** to browse its files. Double-click other resources to show their YAML.
+- **Shell:** Open Shell runs `kubectl exec -it` in a terminal tab in the bottom panel (bash when
+  the image has it, otherwise sh). Sessions keep running when you switch tabs; Reconnect starts a
+  new one. Open Shell in Terminal uses Terminal.app instead.
 - **Inspector:** for pods, each container (init containers and sidecars included) shows its image
   reference, registry, repository, tag, the digest actually running, pull policy, start time,
   restarts and last exit. Right-click the image or digest to copy it.
-- **Bottom panel:** logs, files, YAML and describe open as tabs in a panel under the list, like
+- **Bottom panel:** logs, files, YAML, describe and shells open as tabs in a panel under the list, like
   Xcode's debug area. ⇧⌘Y shows or hides it. Tabs keep running in the background, so logs keep
   streaming while you look at something else.
 - **Logs:** the bar at the bottom has a filter field, the container and line-count pickers, and
@@ -136,3 +141,5 @@ Debug builds read these environment variables, used for scripted UI checks:
   then edits its values, and `KUBEUI_PUSH=1` commits and pushes. `KUBEUI_APP_SECTION=Changes` picks the
   section shown first, and `KUBEUI_OPEN_LAYER=<n>` opens value layer n in the editor.
 - `KUBEUI_INSPECT=<namespace>/<pod>` selects that pod with the inspector open.
+- `KUBEUI_OPEN=shell:<namespace>/<pod>` opens a shell tab; `KUBEUI_SHELL_INPUT` is typed into it
+  (`\n` for Return).

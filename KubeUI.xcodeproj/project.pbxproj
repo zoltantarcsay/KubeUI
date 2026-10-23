@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		7B1E00000000000000000010 /* KubeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7B1E00000000000000000011 /* KubeKit */; };
+		7B1E00000000000000000013 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 7B1E00000000000000000014 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7B1E00000000000000000010 /* KubeKit in Frameworks */,
+				7B1E00000000000000000013 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = KubeUI;
 			packageProductDependencies = (
 				7B1E00000000000000000011 /* KubeKit */,
+				7B1E00000000000000000014 /* SwiftTerm */,
 			);
 			productName = KubeUI;
 			productReference = 7B1E00000000000000000001 /* KubeUI.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				7B1E00000000000000000012 /* XCLocalSwiftPackageReference "KubeKit" */,
+				7B1E00000000000000000015 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7B1E00000000000000000005 /* Products */;
@@ -258,10 +262,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		7B1E00000000000000000015 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 1.11.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		7B1E00000000000000000011 /* KubeKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KubeKit;
+		};
+		7B1E00000000000000000014 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7B1E00000000000000000015 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

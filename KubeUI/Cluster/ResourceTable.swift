@@ -147,7 +147,10 @@ struct ResourceTable: View {
             if model.kind.isPod, objects.count == 1 {
                 Button("Browse Files") { openFiles(first) }
                 Button("Show Logs") { openLogs(first) }
-                containerMenu("Open Shell", first) { container in openShell(first, container: container) }
+                containerMenu("Open Shell", first) { container in
+                    if let ref = podRef(first) { model.openPanel(.shell(ref, container: container)) }
+                }
+                containerMenu("Open Shell in Terminal", first) { container in openShell(first, container: container) }
                 Divider()
             }
             if objects.count == 1 {

@@ -9,6 +9,7 @@ final class PanelTab: Identifiable {
         case logs(LogsModel)
         case text(TextModel)
         case editor(FileEditorModel)
+        case shell(ShellModel)
     }
 
     enum Request {
@@ -16,6 +17,7 @@ final class PanelTab: Identifiable {
         case logs(PodRef)
         case text(TextTarget)
         case editor(FileEditorModel)
+        case shell(PodRef, container: String?)
 
         var id: String {
             switch self {
@@ -23,6 +25,7 @@ final class PanelTab: Identifiable {
             case .logs(let p): "logs:\(p.context)/\(p.namespace)/\(p.pod)"
             case .text(let t): "\(t.mode.rawValue):\(t.context)/\(t.namespace ?? "")/\(t.kindID)/\(t.name)"
             case .editor(let e): e.id
+            case .shell(let p, let c): "shell:\(p.context)/\(p.namespace)/\(p.pod)/\(c ?? "")"
             }
         }
     }
@@ -62,6 +65,13 @@ final class PanelTab: Identifiable {
             title = (editor.title as NSString).lastPathComponent
             help = editor.title
             symbol = editor.file == nil ? "lock.doc" : "doc.text"
+        case .shell(let pod, let container):
+            let shell = ShellModel(pod: pod, container: container)
+            shell.start(app: app)
+            content = .shell(shell)
+            title = pod.containers.count > 1 ? "\(pod.pod) (\(shell.container ?? ""))" : pod.pod
+            help = "Shell — \(pod.pod) in \(pod.namespace) (\(shortContextName(pod.context)))"
+            symbol = "terminal"
         }
     }
 
@@ -69,6 +79,7 @@ final class PanelTab: Identifiable {
         switch content {
         case .files(let model): model.stop()
         case .logs(let model): model.stop()
+        case .shell(let model): model.stop()
         case .text, .editor: break
         }
     }
@@ -136,6 +147,7 @@ struct PanelArea: View {
         case .logs(let logs): LogsPanel(model: logs)
         case .text(let text): TextPanel(model: text)
         case .editor(let editor): FileEditorPanel(model: editor)
+        case .shell(let shell): ShellPanel(model: shell)
         }
     }
 }

@@ -56,7 +56,9 @@ a context-following inspector on the right, and a bottom area for output.
     and output options. Lines are syntax-highlighted.
   - **Files:** Finder's list view in an `NSOutlineView`. Folders expand in place and are listed
     lazily on first expand. A back/forward/up bar sits above and a path bar below.
-- Shell opens Terminal.app with `kubectl exec -it`.
+- **Shell** tabs run `kubectl exec -it` in a pseudo-terminal rendered by SwiftTerm, the one
+  third-party dependency. It is pinned to 1.11.x, the last release without a Metal renderer that
+  needs an extra Xcode download. Terminal.app stays available as an alternative.
 
 Destructive actions (delete, scale, restart, deleting pod files) always confirm and name the context.
 

@@ -125,12 +125,16 @@ public struct KubeClient: Sendable {
         return kubectl.stream(args(rest, namespace: namespace))
     }
 
+    /// kubectl arguments for an interactive shell, preferring bash when the image has it.
+    public func shellArguments(pod: String, namespace: String, container: String?) -> [String] {
+        var rest = ["exec", "-it", pod]
+        if let container { rest += ["--container", container] }
+        return args(rest + ["--", "sh", "-c", "command -v bash >/dev/null && exec bash || exec sh"], namespace: namespace)
+    }
+
     /// Shell command line for an interactive session, for handing to Terminal.
     public func shellCommand(pod: String, namespace: String, container: String?) -> String {
-        var parts = [kubectl.executable.path] + args(["exec", "-it", pod], namespace: namespace)
-        if let container { parts += ["--container", container] }
-        parts += ["--", "sh", "-c", "command -v bash >/dev/null && exec bash || exec sh"]
-        return parts.map(shellQuote).joined(separator: " ")
+        ([kubectl.executable.path] + shellArguments(pod: pod, namespace: namespace, container: container)).map(shellQuote).joined(separator: " ")
     }
 }
 
