@@ -42,7 +42,7 @@ final class ClusterModel {
         return objects.values
             .filter { query.isEmpty || $0.name.lowercased().contains(query) || ($0.namespace ?? "").lowercased().contains(query) }
             .map { o in ResourceRow(id: o.id, object: o, cells: columns.map { $0.value(o, now) }) }
-            .sorted(using: sortOrder)
+            .sorted(using: sortOrder + [KeyPathComparator(\ResourceRow.object.name, comparator: .localizedStandard)])
     }
 
     var selectedObjects: [KubeObject] { selection.compactMap { objects[$0] } }

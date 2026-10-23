@@ -30,6 +30,27 @@ import Testing
         """#.utf8))
         #expect(PodStatus.reason(pod) == "CrashLoopBackOff")
     }
+
+    @Test func runningSidecarDoesNotLookLikeInit() throws {
+        let pod = try JSONValue.parse(Data(#"""
+        {"spec": {"initContainers": [{"name": "proxy", "restartPolicy": "Always"}], "containers": [{"name": "app"}]},
+         "status": {"phase": "Running",
+           "initContainerStatuses": [{"name": "proxy", "started": true, "ready": true, "restartCount": 1, "state": {"running": {}}}],
+           "containerStatuses": [{"name": "app", "ready": true, "restartCount": 2, "state": {"running": {}}}]}}
+        """#.utf8))
+        #expect(PodStatus.reason(pod) == "Running")
+        #expect(PodStatus.readiness(pod) == (2, 2))
+        #expect(ResourceKind.pods.columns.first { $0.title == "Restarts" }!.value(KubeObject(pod), Date()).text == "3")
+    }
+
+    @Test func pendingInitContainerShowsProgress() throws {
+        let pod = try JSONValue.parse(Data(#"""
+        {"spec": {"initContainers": [{"name": "migrate"}, {"name": "proxy", "restartPolicy": "Always"}], "containers": [{"name": "app"}]},
+         "status": {"phase": "Pending",
+           "initContainerStatuses": [{"name": "migrate", "state": {"running": {}}}, {"name": "proxy", "state": {"waiting": {"reason": "PodInitializing"}}}]}}
+        """#.utf8))
+        #expect(PodStatus.reason(pod) == "Init:0/2")
+    }
 }
 
 @Suite struct ListingTests {

@@ -91,13 +91,13 @@ public extension ResourceKind {
         columns: [
             .name,
             Column("Ready", width: 60) { o, _ in
-                let statuses = o.raw["status.containerStatuses"].array
-                let ready = statuses.filter { $0["ready"].bool == true }.count
-                return Cell("\(ready)/\(o.containerNames.count)", sortKey: .number(Double(ready)))
+                let (ready, total) = PodStatus.readiness(o.raw)
+                return Cell("\(ready)/\(total)", sortKey: .number(Double(ready)))
             },
             Column("Status", width: 130) { o, _ in Cell(PodStatus.reason(o.raw)) },
             Column("Restarts", width: 70) { o, _ in
-                .number(o.raw["status.containerStatuses"].array.reduce(0) { $0 + ($1["restartCount"].int ?? 0) })
+                .number((o.raw["status.initContainerStatuses"].array + o.raw["status.containerStatuses"].array)
+                    .reduce(0) { $0 + ($1["restartCount"].int ?? 0) })
             },
             .text("IP", width: 110, "status.podIP"),
             .text("Node", width: 160, "spec.nodeName"),
@@ -291,18 +291,35 @@ public extension ResourceKind {
 }
 
 enum PodStatus {
+    /// Native sidecars: init containers with `restartPolicy: Always` (Kubernetes 1.28+), which keep running.
+    static func sidecarNames(_ pod: JSONValue) -> Set<String> {
+        Set(pod["spec.initContainers"].array.filter { $0["restartPolicy"].string == "Always" }.compactMap { $0["name"].string })
+    }
+
+    /// Ready/total containers as kubectl counts them, sidecars included.
+    static func readiness(_ pod: JSONValue) -> (ready: Int, total: Int) {
+        let sidecars = sidecarNames(pod)
+        let readySidecars = pod["status.initContainerStatuses"].array.filter {
+            sidecars.contains($0["name"].string ?? "") && $0["started"].bool == true && $0["ready"].bool == true
+        }.count
+        let ready = pod["status.containerStatuses"].array.filter { $0["ready"].bool == true }.count
+        return (ready + readySidecars, pod["spec.containers"].array.count + sidecars.count)
+    }
+
     /// A condensed version of kubectl's pod STATUS column logic.
     static func reason(_ pod: JSONValue) -> String {
         if !pod["metadata.deletionTimestamp"].isNull { return "Terminating" }
         var reason = pod["status.reason"].string ?? pod["status.phase"].string ?? "Unknown"
         let initStatuses = pod["status.initContainerStatuses"].array
+        let sidecars = sidecarNames(pod)
         for (i, status) in initStatuses.enumerated() {
             if status["state.terminated.exitCode"].int == 0 { continue }
+            if sidecars.contains(status["name"].string ?? ""), status["started"].bool == true { continue }
             if let waiting = status["state.waiting.reason"].string, waiting != "PodInitializing" {
                 return "Init:\(waiting)"
             }
             if let terminated = status["state.terminated.reason"].string { return "Init:\(terminated)" }
-            return "Init:\(i)/\(initStatuses.count)"
+            return "Init:\(i)/\(pod["spec.initContainers"].array.count)"
         }
         for status in pod["status.containerStatuses"].array.reversed() {
             if let waiting = status["state.waiting.reason"].string {
