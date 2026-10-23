@@ -43,6 +43,24 @@ final class AppModel {
         await ensureKubectl()
     }
 
+    /// Local clones of GitOps repos, keyed by normalized repo URL.
+    private(set) var repoLinks: [String: String] = UserDefaults.standard.dictionary(forKey: "repoLinks") as? [String: String] ?? [:]
+
+    func linkedRoot(for repoURL: String) -> URL? {
+        repoLinks.first { GitRepo.sameRepo($0.key, repoURL) }.map { URL(fileURLWithPath: $0.value) }
+    }
+
+    func link(repoURL: String, to folder: URL) {
+        repoLinks = repoLinks.filter { !GitRepo.sameRepo($0.key, repoURL) }
+        repoLinks[repoURL] = folder.path
+        UserDefaults.standard.set(repoLinks, forKey: "repoLinks")
+    }
+
+    func unlink(repoURL: String) {
+        repoLinks = repoLinks.filter { !GitRepo.sameRepo($0.key, repoURL) }
+        UserDefaults.standard.set(repoLinks, forKey: "repoLinks")
+    }
+
     func client(context: String) async -> KubeClient? {
         guard let kubectl = await ensureKubectl() else { return nil }
         return KubeClient(kubectl: kubectl, context: context)

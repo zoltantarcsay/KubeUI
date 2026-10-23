@@ -36,6 +36,13 @@ final class TextViewController {
         }
     }
 
+    /// Replaces the text, styled with `lineStyler` when set.
+    func setStyled(_ text: String) {
+        guard let lineStyler, let font = textView.font else { return setText(text) }
+        textView.textStorage?.setAttributedString(lineStyler(text, font))
+        textView.scrollToBeginningOfDocument(nil)
+    }
+
     func setText(_ text: String) {
         textView.string = text
         textView.scrollToBeginningOfDocument(nil)

@@ -25,9 +25,18 @@ struct ResourceTable: View {
             menu(for: objects(ids))
         } primaryAction: { ids in
             guard let object = objects(ids).first else { return }
-            if model.kind.isPod { openFiles(object) } else { openText(object, .yaml) }
+            if model.kind.isPod {
+                openFiles(object)
+            } else if model.kind.isArgoApplication {
+                model.openApplication(object)
+            } else {
+                openText(object, .yaml)
+            }
         }
         .overlay { overlay(isEmpty: rows.isEmpty) }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if model.kind.isArgoApplication { RepoLinkBanner(model: model) }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar(count: rows.count) }
         .confirmationDialog(deleteTitle, isPresented: Binding(get: { !pendingDelete.isEmpty }, set: { if !$0 { pendingDelete = [] } })) {
             Button("Delete", role: .destructive) {
@@ -75,6 +84,8 @@ struct ResourceTable: View {
             }
         case "Status", "Type":
             Text(text).foregroundStyle(statusColor(text))
+        case "Sync", "Health":
+            Text(text).foregroundStyle(argoTint(text))
         default:
             Text(text).lineLimit(1).monospacedDigit()
         }
@@ -129,6 +140,10 @@ struct ResourceTable: View {
     @ViewBuilder
     private func menu(for objects: [KubeObject]) -> some View {
         if let first = objects.first {
+            if model.kind.isArgoApplication, objects.count == 1 {
+                Button("Open Application") { model.openApplication(first) }
+                Divider()
+            }
             if model.kind.isPod, objects.count == 1 {
                 Button("Browse Files") { openFiles(first) }
                 Button("Show Logs") { openLogs(first) }
@@ -207,5 +222,53 @@ struct ResourceTable: View {
                 actionError = error.localizedDescription
             }
         }
+    }
+}
+
+/// Offers to link local clones of the GitOps repos the listed Argo CD apps deploy from.
+private struct RepoLinkBanner: View {
+    let model: ClusterModel
+    @Environment(AppModel.self) private var app
+    @AppStorage("dismissedRepoBanner") private var dismissed = false
+
+    var body: some View {
+        let repos = unlinked
+        if !repos.isEmpty, !dismissed {
+            HStack(spacing: 10) {
+                Image(systemName: "link.badge.plus").foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Argo CD detected. Link your GitOps clone to edit app configuration here.").font(.callout)
+                    Text(repos.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                Spacer()
+                Button("Link Repository…") { link(repos[0]) }
+                Button { dismissed = true } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .help("Hide; you can link later from an application's Source card")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider() }
+        }
+    }
+
+    private var unlinked: [String] {
+        let urls = model.objects.values.flatMap { ArgoApplication($0).sources.map(\.repoURL) }
+        var seen: [String] = []
+        for url in urls where !url.isEmpty && app.linkedRoot(for: url) == nil && !seen.contains(where: { GitRepo.sameRepo($0, url) }) {
+            seen.append(url)
+        }
+        return seen
+    }
+
+    private func link(_ repoURL: String) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Link"
+        panel.message = "Choose your local clone of \(repoURL)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        app.link(repoURL: repoURL, to: url)
     }
 }

@@ -1,0 +1,4 @@
+demo-ops:
+  backend:
+    env:
+      APP_TENANT_DISPLAY_NAME: Globex

@@ -17,7 +17,12 @@ struct ClusterWindow: View {
         } detail: {
             GeometryReader { geo in
                 VStack(spacing: 0) {
-                    ResourceTable(model: model)
+                    if let focused = model.focusedApp {
+                        ApplicationView(model: focused, close: model.closeApplication)
+                            .id(focused.application.id)
+                    } else {
+                        ResourceTable(model: model)
+                    }
                     if model.isPanelVisible, !model.panels.isEmpty {
                         let height = min(max(panelHeight, 140), max(140, geo.size.height - 120))
                         PanelArea(model: model)
@@ -33,7 +38,7 @@ struct ClusterWindow: View {
                         .inspectorColumnWidth(min: 260, ideal: 320, max: 480)
                 }
         }
-        .navigationTitle(model.kind.title)
+        .navigationTitle(model.focusedApp?.application.name ?? model.kind.title)
         .navigationSubtitle(subtitle)
         .searchable(text: $model.search, placement: .toolbar, prompt: "Filter by name")
         .toolbar { toolbar }
@@ -152,7 +157,7 @@ private struct Sidebar: View {
 
     var body: some View {
         List(selection: Binding(get: { model.kind }, set: { if let k = $0 { model.select(kind: k) } })) {
-            ForEach(ResourceKind.Section.allCases, id: \.self) { section in
+            ForEach(ResourceKind.Section.allCases.filter { $0 != .argocd || model.argoAvailable }, id: \.self) { section in
                 Section(section.rawValue) {
                     ForEach(ResourceKind.all.filter { $0.section == section }) { kind in
                         Label(kind.title, systemImage: kind.symbol).tag(kind)

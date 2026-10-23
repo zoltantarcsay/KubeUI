@@ -1,0 +1,43 @@
+# Mirrors a typical ApplicationSet-based GitOps repo: a values ref plus a chart whose valueFiles chain is
+# defaults -> clusters -> clients, with some env pinned inline by the ApplicationSet.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: demo-ops-application-set
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+  - list:
+      elements:
+      - {tenant: acme, environment: tst, region: eu-west-1}
+      - {tenant: globex, environment: prd, region: eu-west-1}
+  template:
+    metadata:
+      name: demo-ops-app-{{.environment}}
+    spec:
+      project: default
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: demo-ops-{{.tenant}}-{{.environment}}
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true]
+      sources:
+      - repoURL: git://gitserver.gitops.svc.cluster.local/gitops.git
+        targetRevision: main
+        ref: values
+      - repoURL: git://gitserver.gitops.svc.cluster.local/gitops.git
+        targetRevision: main
+        path: charts/demo-ops
+        helm:
+          ignoreMissingValueFiles: true
+          valueFiles:
+          - $values/defaults/demo-ops-app.yaml
+          - $values/clusters/kind/local/kubeui-dev/demo-ops/values.yaml
+          - $values/clients/{{.tenant}}/{{.environment}}/{{.region}}/demo-ops-app.yaml
+          values: |
+            demo-ops:
+              backend:
+                env:
+                  APP_SCHEMA: {{.tenant}}_{{.environment}}_ops

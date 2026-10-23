@@ -60,8 +60,38 @@ a context-following inspector on the right, and a bottom area for output.
 
 Destructive actions (delete, scale, restart, deleting pod files) always confirm and name the context.
 
+## Argo CD and GitOps
+
+Three interfaces (cluster, Argo CD, GitOps repo) are layered as one pipeline per application:
+**Source → Argo CD → Cluster**. Each stage lights up as a change moves from a local edit to running pods.
+
+- **Detection:** `kubectl api-resources --api-group=argoproj.io`. Discovery is readable under tight RBAC.
+  Argo CD objects are always listed cluster-wide, because they live in Argo's own namespace.
+- **No Argo login:** everything goes through the `Application` CR. Refresh annotates
+  `argocd.argoproj.io/refresh`, sync patches `.operation`, and status comes from `.status`. Argo CD
+  3.x no longer stores per-resource health there, so workload and pod health is watched live.
+- **Deterministic source mapping:** this uses the *live* Application, not the ApplicationSet template.
+  Its `spec.sources[*].helm.valueFiles` are already rendered (e.g.
+  `$values/clients/acme/prd/eu-west-1/billing-app.yaml`). `$ref/` resolves to that
+  source's repo. The layers are the chart's `values.yaml`, the valueFiles in order, then inline
+  `helm.values` (which wins and is shown as locked).
+- **Env vars:** every `env` mapping found across the layers is a block (e.g. `my-app.backend.env`).
+  Maps merge across layers, so each var shows the layer that wins.
+- **Edit target:** the winning file if it's specific (any value file after the first). Otherwise the
+  last value file, as an override, so shared `defaults/` never change silently.
+- **YAML edits are surgical** (`YAMLEdit`). They touch only the changed lines and keep comments,
+  quoting and indentation, so GitOps diffs stay minimal.
+- **Git** runs the user's `git` in their clone, with their credentials. Supported: status, diff,
+  commit, push, pull `--ff-only`, discard, and PR via a new branch plus GitHub's compare page.
+- **Rollout tracking:** after a push, Argo is asked to refresh. Then: Argo's synced revision equals
+  the pushed SHA (or, for a PR, any new revision), the sync operation has succeeded, health is
+  Healthy, and pods are newer than the push.
+
 ## Not yet / next
 
 - Port-forwarding, edit-and-apply YAML, CRDs (generic resource discovery via `kubectl api-resources`).
+- YAML syntax highlighting in the YAML/describe viewer; image details in the pod inspector.
+- Argo CD: editing values beyond env (image tags, replicas), apps whose Applications live on a separate
+  control plane (e.g. a hosted Argo CD), and ApplicationSet-pinned values (link to the appset file).
 - Ephemeral debug containers for distroless images (no shell → no file browsing today).
 - Native REST transport for lists/watches if `kubectl` process count ever becomes a problem.

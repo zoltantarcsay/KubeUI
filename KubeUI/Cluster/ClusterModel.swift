@@ -36,12 +36,20 @@ final class ClusterModel {
     private(set) var panels: [PanelTab] = []
     var activePanelID: String?
     var isPanelVisible = false
+
+    /// Whether this cluster serves Argo CD's API; adds the Argo CD sidebar section.
+    private(set) var argoAvailable = false
+    /// The Argo CD application drilled into from the Applications list.
+    private(set) var focusedApp: ArgoAppModel?
     private var watchTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
 
     var columns: [Column] {
-        kind.namespaced && namespace == nil ? [.namespace] + kind.columns : kind.columns
+        kind.namespaced && listNamespace == nil && kind.section != .argocd ? [.namespace] + kind.columns : kind.columns
     }
+
+    /// Argo CD objects live in Argo's own namespace, so they're always listed cluster-wide.
+    var listNamespace: String? { kind.section == .argocd ? nil : namespace }
 
     var rows: [ResourceRow] {
         let columns = columns
@@ -85,7 +93,16 @@ final class ClusterModel {
         namespaces = []
         guard let kubectl = await app.ensureKubectl() else { return }
         client = KubeClient(kubectl: kubectl, context: name)
+        closeApplication()
+        argoAvailable = false
+        if kind.section == .argocd { kind = .pods }
         reload()
+        if let client {
+            Task {
+                let available = await client.hasArgoCD()
+                if context == name { argoAvailable = available }
+            }
+        }
         // Listing namespaces may be forbidden by RBAC; the picker then offers just the default.
         if let list = try? await client?.namespaces(), context == name {
             namespaces = list
@@ -93,6 +110,7 @@ final class ClusterModel {
     }
 
     func select(kind: ResourceKind) {
+        closeApplication()
         guard kind != self.kind else { return }
         self.kind = kind
         sortOrder = [KeyPathComparator(\ResourceRow.[sort: 0])]
@@ -114,7 +132,7 @@ final class ClusterModel {
         isLive = false
         guard let client else { return }
         isLoading = true
-        let kind = kind, namespace = namespace
+        let kind = kind, namespace = listNamespace
         watchTask = Task { [weak self] in
             do {
                 for try await update in client.watch(kind, namespace: namespace) {
@@ -157,6 +175,20 @@ final class ClusterModel {
         watchTask?.cancel()
         clockTask?.cancel()
         for tab in panels { tab.stop() }
+        focusedApp?.stop()
+    }
+
+    func openApplication(_ object: KubeObject) {
+        guard let client, let app else { return }
+        focusedApp?.stop()
+        let model = ArgoAppModel(client: client, application: ArgoApplication(object), cluster: self)
+        model.start(app: app)
+        focusedApp = model
+    }
+
+    func closeApplication() {
+        focusedApp?.stop()
+        focusedApp = nil
     }
 
     var activePanel: PanelTab? { panels.first { $0.id == activePanelID } }

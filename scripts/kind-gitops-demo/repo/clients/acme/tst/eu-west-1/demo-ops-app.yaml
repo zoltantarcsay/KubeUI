@@ -1,0 +1,7 @@
+# Tenant overrides for acme / tst.
+demo-ops:
+  backend:
+    replicas: 2
+    env:
+      APP_TENANT_DISPLAY_NAME: "ACME Test"
+      LOG_LEVEL: DEBUG

@@ -39,9 +39,9 @@ public struct KubeClient: Sendable {
     }
 
     /// `namespace == nil` means all namespaces.
-    public func list(_ kind: ResourceKind, namespace: String?) async throws -> [KubeObject] {
+    public func list(_ kind: ResourceKind, namespace: String?, selector: [String] = []) async throws -> [KubeObject] {
         let (ns, all) = scope(kind, namespace)
-        let data = try await kubectl.run(args(["get", kind.id, "-o", "json"], namespace: ns, allNamespaces: all))
+        let data = try await kubectl.run(args(["get", kind.id, "-o", "json"] + selector, namespace: ns, allNamespaces: all))
         return try JSONValue.parse(data)["items"].array.map(KubeObject.init)
     }
 
@@ -53,15 +53,17 @@ public struct KubeClient: Sendable {
 
     /// Lists, then streams changes. When the server ends the watch it re-lists and resumes,
     /// so the consumer never holds objects that were deleted while disconnected.
-    public func watch(_ kind: ResourceKind, namespace: String?) -> AsyncThrowingStream<WatchUpdate, Error> {
+    /// `name` narrows the watch to one object via a field selector.
+    public func watch(_ kind: ResourceKind, namespace: String?, name: String? = nil) -> AsyncThrowingStream<WatchUpdate, Error> {
         let (ns, all) = scope(kind, namespace)
-        let watchArgs = args(["get", kind.id, "-o", "json", "--watch", "--output-watch-events"], namespace: ns, allNamespaces: all)
+        let selector = name.map { ["--field-selector", "metadata.name=\($0)"] } ?? []
+        let watchArgs = args(["get", kind.id, "-o", "json", "--watch", "--output-watch-events"] + selector, namespace: ns, allNamespaces: all)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 var backoff: Duration = .seconds(1)
                 while !Task.isCancelled {
                     do {
-                        continuation.yield(.snapshot(try await list(kind, namespace: namespace)))
+                        continuation.yield(.snapshot(try await list(kind, namespace: namespace, selector: selector)))
                     } catch {
                         continuation.finish(throwing: error)
                         return

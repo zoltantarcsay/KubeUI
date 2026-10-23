@@ -6,7 +6,8 @@ import SwiftUI
 /// Debug-build hooks for scripted UI checks without screen-recording permission:
 /// `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG of every window every 2s;
 /// `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch;
-/// `KUBEUI_EXPAND=/etc,/usr` expands folders in the last opened Files tab.
+/// `KUBEUI_EXPAND=/etc,/usr` expands folders in the last opened Files tab;
+/// `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application.
 struct DebugHooks: ViewModifier {
     let model: ClusterModel
     private static var started = false
@@ -22,8 +23,14 @@ struct DebugHooks: ViewModifier {
             for spec in specs.split(separator: ",") {
                 let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
                 let path = parts.last?.split(separator: "/").map(String.init) ?? []
-                guard parts.count == 2, path.count == 2,
-                      let pod = try? await client.get(.pods, name: path[1], namespace: path[0]) else { continue }
+                guard parts.count == 2, path.count == 2 else { continue }
+                if parts[0] == "app" {
+                    guard let object = try? await client.get(.argoApplications, name: path[1], namespace: path[0]) else { continue }
+                    model.openApplication(object)
+                    await Self.scriptRollout(model, env: env)
+                    continue
+                }
+                guard let pod = try? await client.get(.pods, name: path[1], namespace: path[0]) else { continue }
                 let ref = PodRef(context: context, namespace: path[0], pod: path[1], containers: pod.containerNames)
                 model.openPanel(parts[0] == "logs" ? .logs(ref) : .files(ref))
             }
@@ -32,6 +39,19 @@ struct DebugHooks: ViewModifier {
                 for path in expand.split(separator: ",") { files.setExpanded(String(path), true) }
             }
         }
+    }
+
+    /// `KUBEUI_ENV_SET=KEY=VALUE` edits the opened app's env like the edit sheet would;
+    /// `KUBEUI_PUSH=1` then commits and pushes, starting rollout tracking.
+    static func scriptRollout(_ model: ClusterModel, env: [String: String]) async {
+        guard let spec = env["KUBEUI_ENV_SET"], let eq = spec.firstIndex(of: "="), let app = model.focusedApp else { return }
+        for _ in 0..<40 where app.layers.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
+        let key = String(spec[..<eq]), value = String(spec[spec.index(after: eq)...])
+        guard let block = app.envBlock, let layer = HelmValues.targetLayer(for: key, block: block, in: app.layers) else { return }
+        app.setEnv(key, value: value, layer: layer)
+        guard env["KUBEUI_PUSH"] == "1" else { return }
+        try? await Task.sleep(for: .seconds(3))
+        await app.commitAndPush("\(app.application.name): set \(key)")
     }
 
     static func snapshotLoop(_ dir: URL) async {

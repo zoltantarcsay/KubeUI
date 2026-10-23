@@ -87,6 +87,34 @@ kubectl --context kind-kubeui-dev -n demo run debian --image=debian:bookworm-sli
   - ⌘[ / ⌘] go back and forward, ⇧⌘G goes to a path, ⇧⌘N creates a new folder and ⌘⌫ deletes.
   - Pods with several containers, native sidecars included, have a container picker.
 
+## Argo CD and GitOps
+
+When the cluster serves Argo CD's API, the sidebar gains an **Argo CD** section. Double-click an
+application to see it as one pipeline: **Source** (your clone) → **Argo CD** (sync) → **Cluster**
+(health, pods).
+
+- **Link your clone once per repo URL**, from the banner above Applications or the app's Source
+  card. KubeUI uses your own `git`, credentials and SSH setup, and checks the clone's origin.
+- **Configuration** shows the app's effective env vars across its Helm value layers. These are the
+  chart's `values.yaml`, then each resolved `valueFiles` entry in order, then inline values from
+  the ApplicationSet. Each var lists the layer that sets it.
+  - Editing writes only the lines that change, keeping comments and formatting.
+  - Edits go where they're safe by default: the file that already sets the key when it's tenant or
+    cluster specific, otherwise the most specific file, so a shared `defaults/` value gets an
+    override instead of changing every tenant.
+  - Keys pinned inline by an ApplicationSet are locked.
+- **Changes** shows the diff. **Commit & Push** pushes to the tracked branch, asks Argo CD to
+  refresh, and follows the rollout until new pods are ready. **Push as PR…** pushes a branch and
+  opens GitHub's PR page; tracking then waits for the merge.
+- **Resources** lists what Argo CD manages, with live readiness and pods. Right-click a pod for logs
+  or files.
+
+### Local playground
+
+`scripts/kind-gitops-demo/setup.sh <clone dir>` adds Argo CD, an in-cluster git server and an
+ApplicationSet shaped like a typical ApplicationSet-based GitOps repo (defaults → clusters → clients value files)
+to the kind cluster, and clones the repo to `<clone dir>`. Keep its port-forward running while you push.
+
 Copying files needs `sh` and `tar` in the container, as `kubectl cp` does. Plain files can still
 be uploaded without `tar`. Distroless images aren't supported yet.
 
@@ -97,3 +125,6 @@ Debug builds read these environment variables, used for scripted UI checks:
 - `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG and a view-tree dump of every window every 2 seconds.
 - `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch.
 - `KUBEUI_EXPAND=/etc,/usr` expands those folders in the last opened Files tab.
+- `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application. `KUBEUI_ENV_SET=KEY=VALUE`
+  then edits its env, and `KUBEUI_PUSH=1` commits and pushes. `KUBEUI_APP_SECTION=Changes` picks the
+  section shown first.

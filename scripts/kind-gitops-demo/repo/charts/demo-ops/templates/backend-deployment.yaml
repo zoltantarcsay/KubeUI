@@ -1,0 +1,30 @@
+{{- $v := index .Values "demo-ops" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend
+spec:
+  replicas: {{ $v.backend.replicas }}
+  selector:
+    matchLabels: {app: {{ .Release.Name }}-backend}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-backend}
+    spec:
+      containers:
+      - name: backend
+        image: {{ $v.backend.image }}
+        command: [sh, -c, "while true; do date; env | grep -E '^(APP|SPRING|LOG)_' | sort; sleep 15; done"]
+        env:
+        {{- range $key, $value := $v.backend.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-backend
+spec:
+  selector: {app: {{ .Release.Name }}-backend}
+  ports: [{port: 8080}]

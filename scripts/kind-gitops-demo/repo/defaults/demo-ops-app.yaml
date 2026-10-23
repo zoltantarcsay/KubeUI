@@ -1,0 +1,6 @@
+# Base values for every tenant.
+demo-ops:
+  backend:
+    env:
+      LOG_LEVEL: INFO
+      APP_FEATURE_REPORTS: "false"

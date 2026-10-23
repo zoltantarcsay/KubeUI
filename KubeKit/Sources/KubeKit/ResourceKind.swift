@@ -64,7 +64,7 @@ public struct Column: Sendable, Identifiable {
 /// A resource type shown in the sidebar, with k9s/kubectl-like columns.
 public struct ResourceKind: Sendable, Identifiable, Hashable {
     public enum Section: String, Sendable, CaseIterable {
-        case workloads = "Workloads", network = "Network", config = "Config", storage = "Storage", cluster = "Cluster"
+        case argocd = "Argo CD", workloads = "Workloads", network = "Network", config = "Config", storage = "Storage", cluster = "Cluster"
     }
 
     /// The kubectl resource name, e.g. `deployments.apps`.
@@ -79,6 +79,7 @@ public struct ResourceKind: Sendable, Identifiable, Hashable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
     public var isPod: Bool { id == "pods" }
+    public var isArgoApplication: Bool { id == ResourceKind.argoApplications.id }
     public var isScalable: Bool { ["deployments.apps", "statefulsets.apps", "replicasets.apps"].contains(id) }
     public var isRestartable: Bool { ["deployments.apps", "statefulsets.apps", "daemonsets.apps"].contains(id) }
 
@@ -105,7 +106,27 @@ public extension ResourceKind {
         ]
     )
 
+    static let argoApplications = ResourceKind(
+        id: "applications.argoproj.io", title: "Applications", symbol: "arrow.triangle.branch", section: .argocd, namespaced: true,
+        columns: [
+            .name,
+            .text("Sync", width: 90, "status.sync.status"),
+            .text("Health", width: 100, "status.health.status"),
+            Column("Revision", width: 80) { o, _ in
+                Cell(String((o.raw["status.sync.revision"].string ?? o.raw["status.sync.revisions"][0].string ?? "").prefix(7)))
+            },
+            .text("Project", width: 110, "spec.project"),
+            .text("Destination", width: 180, "spec.destination.namespace"),
+            .age,
+        ]
+    )
+
     static let all: [ResourceKind] = [
+        argoApplications,
+        ResourceKind(
+            id: "applicationsets.argoproj.io", title: "ApplicationSets", symbol: "square.stack.3d.down.right", section: .argocd, namespaced: true,
+            columns: [.name, .age]
+        ),
         pods,
         ResourceKind(
             id: "deployments.apps", title: "Deployments", symbol: "square.stack.3d.up", section: .workloads, namespaced: true,
