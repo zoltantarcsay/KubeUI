@@ -61,7 +61,6 @@ cd KubeKit && swift test
 
 - This is a public repo. Use only neutral examples (`example-org/gitops`, `123456789012`, `my-app`,
   `acme`), never names, account IDs or repos from real employers or clusters.
-- Commit as `Zoltan Tarcsay <6171404+zoltantarcsay@users.noreply.github.com>` (set in the repo's
-  local git config).
+- Commit with the contributor's own git identity. Don't change git config or credentials.
 - When features change, update the wiki pages and retake affected screenshots from the kind
   playground. Screenshots live in the wiki repo's `images/`.
