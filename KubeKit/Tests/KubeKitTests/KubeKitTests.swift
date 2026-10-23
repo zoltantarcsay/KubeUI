@@ -40,6 +40,7 @@ import Testing
         """#.utf8))
         #expect(PodStatus.reason(pod) == "Running")
         #expect(PodStatus.readiness(pod) == (2, 2))
+        #expect(KubeObject(pod).containerNames == ["app", "proxy"])
         #expect(ResourceKind.pods.columns.first { $0.title == "Restarts" }!.value(KubeObject(pod), Date()).text == "3")
     }
 

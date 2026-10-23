@@ -21,9 +21,10 @@ public struct KubeObject: Sendable, Identifiable, Hashable {
     public var labels: [String: String] { raw["metadata.labels"].object.compactMapValues(\.string) }
     public var annotations: [String: String] { raw["metadata.annotations"].object.compactMapValues(\.string) }
 
-    /// Pod container names, regular containers first.
+    /// Pod container names, regular containers first, then native sidecars (long-running init containers).
     public var containerNames: [String] {
         raw["spec.containers"].array.compactMap { $0["name"].string }
+            + raw["spec.initContainers"].array.filter { $0["restartPolicy"].string == "Always" }.compactMap { $0["name"].string }
     }
 
     public static func parseDate(_ string: String) -> Date? {
