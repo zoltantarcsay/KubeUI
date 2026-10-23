@@ -56,6 +56,28 @@ final class AppModel {
         UserDefaults.standard.set(repoLinks, forKey: "repoLinks")
     }
 
+    enum LinkResult {
+        case linked(warning: String?)
+        case failed(String)
+    }
+
+    /// Links the clone containing `folder` after checking it's a git repo whose origin is `repoURL`.
+    /// A different origin is linked with a warning (forks and mirrors are legitimate).
+    func linkRepo(_ folder: URL, to repoURL: String) async -> LinkResult {
+        guard let kubectl = await ensureKubectl() else { return .failed(setupError ?? "kubectl isn't available") }
+        guard let repo = try? await GitRepo.open(folder, environment: kubectl.environment) else {
+            return .failed("\(folder.path) isn't inside a git repository. Choose the folder you cloned \(repoURL) into.")
+        }
+        let picked = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        let inside = repo.root.resolvingSymlinksInPath().standardizedFileURL.path == picked ? "" : " (the folder you picked is inside it)"
+        guard let origin = try? await repo.remoteURL(), !origin.isEmpty else {
+            return .failed("The git repository at \(repo.root.path)\(inside) has no origin remote, so it isn't a clone of \(repoURL). Choose the folder you cloned it into.")
+        }
+        link(repoURL: repoURL, to: repo.root)
+        if GitRepo.sameRepo(origin, repoURL) { return .linked(warning: nil) }
+        return .linked(warning: "Linked \(repo.root.path)\(inside), but its origin is \(origin), not \(repoURL). If that's the wrong clone, link another folder from the app's Source card.")
+    }
+
     func unlink(repoURL: String) {
         repoLinks = repoLinks.filter { !GitRepo.sameRepo($0.key, repoURL) }
         UserDefaults.standard.set(repoLinks, forKey: "repoLinks")

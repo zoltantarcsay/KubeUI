@@ -40,8 +40,9 @@ public struct GitRepo: Sendable {
         return String(decoding: output.stdout, as: UTF8.self)
     }
 
+    /// `origin` as configured, before any `url.<base>.insteadOf` rewriting.
     public func remoteURL() async throws -> String {
-        try await run(["remote", "get-url", "origin"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        try await run(["config", "--get", "remote.origin.url"]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public func currentBranch() async throws -> String {

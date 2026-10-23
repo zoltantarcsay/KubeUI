@@ -162,17 +162,13 @@ final class ArgoAppModel {
 
     /// Links a local clone, checking that its origin is the app's repo.
     func link(_ folder: URL) async {
-        guard let app, let repoURL = valuesSource?.repoURL, let kubectl = await app.ensureKubectl() else { return }
-        do {
-            let candidate = try await GitRepo.open(folder, environment: kubectl.environment)
-            let origin = try await candidate.remoteURL()
-            if !GitRepo.sameRepo(origin, repoURL) {
-                alert = "Linked anyway, but this clone's origin (\(origin)) doesn't match the app's repo (\(repoURL))."
-            }
-            app.link(repoURL: repoURL, to: candidate.root)
+        guard let app, let repoURL = valuesSource?.repoURL else { return }
+        switch await app.linkRepo(folder, to: repoURL) {
+        case .failed(let message):
+            alert = message
+        case .linked(let warning):
+            alert = warning
             await openRepo()
-        } catch {
-            alert = "\(folder.path) isn't a git clone: \(error.localizedDescription)"
         }
     }
 

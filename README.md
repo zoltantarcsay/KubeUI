@@ -125,7 +125,10 @@ application to see it as one pipeline: **Source** (your clone) → **Argo CD** (
 
 `scripts/kind-gitops-demo/setup.sh <clone dir>` adds Argo CD, an in-cluster git server and an
 ApplicationSet shaped like a typical ApplicationSet-based GitOps repo (defaults → clusters → clients value files)
-to the kind cluster, and clones the repo to `<clone dir>`. Keep its port-forward running while you push.
+to the kind cluster, and clones the repo into `<clone dir>`. Link that clone in KubeUI, not the
+`repo/` template folder. The clone's `origin` is the same in-cluster URL Argo CD uses, and a git
+`insteadOf` rule routes fetch and push through `kubectl port-forward` on port 9418. The script starts
+the port-forward if it isn't running; keep it running while you push. Re-running the script is safe.
 
 Copying files needs `sh` and `tar` in the container, as `kubectl cp` does. Plain files can still
 be uploaded without `tar`. Distroless images aren't supported yet.

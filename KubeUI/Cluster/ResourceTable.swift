@@ -233,6 +233,7 @@ private struct RepoLinkBanner: View {
     let model: ClusterModel
     @Environment(AppModel.self) private var app
     @AppStorage("dismissedRepoBanner") private var dismissed = false
+    @State private var message: String?
 
     var body: some View {
         let repos = unlinked
@@ -253,6 +254,10 @@ private struct RepoLinkBanner: View {
             .padding(.vertical, 8)
             .background(.bar)
             .overlay(alignment: .bottom) { Divider() }
+            .alert("Link Repository", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            } message: {
+                Text(message ?? "")
+            }
         }
     }
 
@@ -272,6 +277,11 @@ private struct RepoLinkBanner: View {
         panel.prompt = "Link"
         panel.message = "Choose your local clone of \(repoURL)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        app.link(repoURL: repoURL, to: url)
+        Task {
+            switch await app.linkRepo(url, to: repoURL) {
+            case .failed(let text): message = text
+            case .linked(let warning): message = warning
+            }
+        }
     }
 }
