@@ -72,6 +72,9 @@ kubectl --context kind-kubeui-dev -n demo run debian --image=debian:bookworm-sli
 - **Right-click a row** for Browse Files, Show Logs, Open Shell (Terminal), Show YAML, Describe,
   Scale, Restart, Copy Name and Delete.
 - **Double-click a pod** to browse its files. Double-click other resources to show their YAML.
+- **Inspector:** for pods, each container (init containers and sidecars included) shows its image
+  reference, registry, repository, tag, the digest actually running, pull policy, start time,
+  restarts and last exit. Right-click the image or digest to copy it.
 - **Bottom panel:** logs, files, YAML and describe open as tabs in a panel under the list, like
   Xcode's debug area. ⇧⌘Y shows or hides it. Tabs keep running in the background, so logs keep
   streaming while you look at something else.
@@ -132,3 +135,4 @@ Debug builds read these environment variables, used for scripted UI checks:
 - `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application. `KUBEUI_VALUE_SET=a.b.KEY=VALUE`
   then edits its values, and `KUBEUI_PUSH=1` commits and pushes. `KUBEUI_APP_SECTION=Changes` picks the
   section shown first, and `KUBEUI_OPEN_LAYER=<n>` opens value layer n in the editor.
+- `KUBEUI_INSPECT=<namespace>/<pod>` selects that pod with the inspector open.

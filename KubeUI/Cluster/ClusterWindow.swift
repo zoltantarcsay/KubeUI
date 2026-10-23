@@ -4,7 +4,7 @@ import SwiftUI
 struct ClusterWindow: View {
     @Environment(AppModel.self) private var app
     @State private var model = ClusterModel()
-    @State private var showInspector = false
+    @State private var showInspector = DebugHooks.showsInspector
     @State private var typedNamespace: String?
     @SceneStorage("context") private var savedContext: String?
     @SceneStorage("kind") private var savedKind: String?

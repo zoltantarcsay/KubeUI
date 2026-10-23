@@ -54,6 +54,21 @@ import Testing
     }
 }
 
+@Suite struct ImageReferenceTests {
+    @Test func parsesCommonReferences() {
+        let hub = ImageReference("busybox:1.36")
+        #expect(hub.registry == "docker.io" && hub.repository == "library/busybox" && hub.tag == "1.36" && hub.registryName == "Docker Hub")
+        let ecr = ImageReference("123456789012.dkr.ecr.eu-west-1.amazonaws.com/my-app:1.2.3")
+        #expect(ecr.repository == "my-app" && ecr.tag == "1.2.3" && ecr.registryName == "Amazon ECR (123456789012, eu-west-1)")
+        let port = ImageReference("localhost:5000/team/app")
+        #expect(port.registry == "localhost:5000" && port.repository == "team/app" && port.tag == "latest")
+        let pinned = ImageReference("ghcr.io/org/app@sha256:abc")
+        #expect(pinned.tag == nil && pinned.digest == "sha256:abc")
+        #expect(ImageReference.digest(fromImageID: "docker-pullable://busybox@sha256:73aa") == "sha256:73aa")
+        #expect(ImageReference.digest(fromImageID: "sha256:73aa") == "sha256:73aa")
+    }
+}
+
 @Suite struct ListingTests {
     @Test func parsesStatOutput() {
         let output = """

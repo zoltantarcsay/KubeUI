@@ -1,7 +1,8 @@
-#if DEBUG
 import AppKit
 import KubeKit
 import SwiftUI
+
+#if DEBUG
 
 /// Debug-build hooks for scripted UI checks without screen-recording permission:
 /// `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG of every window every 2s;
@@ -11,6 +12,8 @@ import SwiftUI
 struct DebugHooks: ViewModifier {
     let model: ClusterModel
     private static var started = false
+    /// `KUBEUI_INSPECT=<namespace>/<pod>` selects that pod with the inspector shown.
+    static let showsInspector = ProcessInfo.processInfo.environment["KUBEUI_INSPECT"] != nil
 
     func body(content: Content) -> some View {
         content.task(id: model.context) {
@@ -18,6 +21,16 @@ struct DebugHooks: ViewModifier {
             if let dir = env["KUBEUI_SNAPSHOT_DIR"], !Self.started {
                 Self.started = true
                 Task { await Self.snapshotLoop(URL(fileURLWithPath: dir)) }
+            }
+            if let inspect = env["KUBEUI_INSPECT"] {
+                let parts = inspect.split(separator: "/").map(String.init)
+                for _ in 0..<40 {
+                    if let pod = model.objects.values.first(where: { $0.namespace == parts.first && $0.name == parts.last }) {
+                        model.selection = [pod.id]
+                        break
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
             }
             guard let specs = env["KUBEUI_OPEN"], let context = model.context, let client = model.client else { return }
             for spec in specs.split(separator: ",") {
@@ -80,6 +93,10 @@ struct DebugHooks: ViewModifier {
         if let text = view as? NSTextView { line += " chars=\(text.string.count)" }
         return ([line] + view.subviews.map { dump($0, depth: depth + 1) }).joined(separator: "\n")
     }
+}
+#else
+enum DebugHooks {
+    static let showsInspector = false
 }
 #endif
 

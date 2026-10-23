@@ -93,7 +93,6 @@ Three interfaces (cluster, Argo CD, GitOps repo) are layered as one pipeline per
 ## Not yet / next
 
 - Port-forwarding, edit-and-apply YAML, CRDs (generic resource discovery via `kubectl api-resources`).
-- Image details in the pod inspector.
 - Argo CD: list items in the values tree, apps whose Applications live on a separate
   control plane (e.g. a hosted Argo CD), and ApplicationSet-pinned values (link to the appset file).
 - Ephemeral debug containers for distroless images (no shell → no file browsing today).

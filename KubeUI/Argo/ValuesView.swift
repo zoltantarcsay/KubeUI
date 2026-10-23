@@ -100,7 +100,7 @@ struct ValuesView: View {
                             .help(n.definedIn.map(layerName).joined(separator: " + "))
                     } else {
                     HStack(spacing: 4) {
-                        if case .inline = model.layers[n.layer].origin { Image(systemName: "lock.fill").foregroundStyle(.orange) }
+                        if case .inline? = model.layers[safe: n.layer]?.origin { Image(systemName: "lock.fill").foregroundStyle(.orange) }
                         Text(layerName(n.layer)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                         if n.kind != .mapping, n.definedIn.count > 1 {
                             Text("overrides \(n.definedIn.count - 1)").font(.caption2).foregroundStyle(.tertiary)
@@ -124,7 +124,7 @@ struct ValuesView: View {
         if n.kind != .mapping { Button("Edit…") { edit(n) } }
         if n.kind == .mapping { Button("Add Key Here…") { add(under: n) } }
         Button("Open \(layerName(n.layer))") { model.openLayer(n.layer) }
-        if model.layers[n.layer].isEditable {
+        if model.layers[safe: n.layer]?.isEditable == true {
             Button("Remove from \(layerName(n.layer))") { model.removeValue(n.path, layer: n.layer) }
         }
         Divider()
@@ -183,7 +183,7 @@ struct ValuesView: View {
     }
 
     private func layerName(_ i: Int) -> String {
-        let layer = model.layers[i]
+        guard let layer = model.layers[safe: i] else { return "?" }
         if case .inline(let owner) = layer.origin { return owner }
         return layer.title
     }
@@ -291,7 +291,7 @@ private struct ValueEditSheet: View {
         if let pinned {
             return "\(path.joined(separator: ".")) is set inline by the \(pinned.title.replacingOccurrences(of: "Inline values ", with: "")), which overrides every values file. Change it there instead."
         }
-        let layer = model.layers[edit.layer]
+        guard let layer = model.layers[safe: edit.layer] else { return "" }
         if let shadow = model.layers.indices.last(where: { $0 > edit.layer && YAMLEdit(model.layers[$0].text).entry(path) != nil }) {
             return "A later layer (\(model.layers[shadow].title)) also sets this, so the edit won't take effect."
         }
@@ -300,4 +300,8 @@ private struct ValueEditSheet: View {
         }
         return "Saved to \(layer.title)\(layer.exists ? "" : " (new file)"). Typed values are written as YAML: 3 and true stay a number and a boolean; quote them to make strings."
     }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
