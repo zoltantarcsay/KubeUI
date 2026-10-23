@@ -66,7 +66,7 @@ struct ResourceTable: View {
 
     @ViewBuilder
     private func cell(_ row: ResourceRow, index: Int, title: String) -> some View {
-        let text = row.cells[index].text
+        let text = row.cells.indices.contains(index) ? row.cells[index].text : ""
         switch title {
         case "Name":
             Label {

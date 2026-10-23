@@ -6,7 +6,8 @@ nonisolated struct ResourceRow: Identifiable, Sendable {
     let object: KubeObject
     let cells: [Cell]
 
-    subscript(sort index: Int) -> SortKey { cells[index].sortKey }
+    /// Tolerates stale indexes: the column set changes when switching between one and all namespaces.
+    subscript(sort index: Int) -> SortKey { cells.indices.contains(index) ? cells[index].sortKey : .text("") }
 }
 
 /// State of one cluster window: which context/namespace/kind is shown, and the live object list.
@@ -73,6 +74,7 @@ final class ClusterModel {
     func switchContext(_ name: String, app: AppModel) async {
         context = name
         namespace = contexts.first { $0.name == name }?.namespace
+        sortOrder = [KeyPathComparator(\ResourceRow.[sort: 0])]
         namespaces = []
         guard let kubectl = await app.ensureKubectl() else { return }
         client = KubeClient(kubectl: kubectl, context: name)
@@ -93,6 +95,7 @@ final class ClusterModel {
     func select(namespace: String?) {
         guard namespace != self.namespace else { return }
         self.namespace = namespace
+        sortOrder = [KeyPathComparator(\ResourceRow.[sort: 0])]
         reload()
     }
 
