@@ -12,6 +12,7 @@ behind using `kubectl` as the transport are in [docs/DESIGN.md](docs/DESIGN.md).
 |---|---|
 | `KubeKit/` | Swift package, no UI: kubectl runner, watch streaming, resource columns, tar writer, pod file operations. Unit and integration tests. |
 | `KubeUI/` | The app (SwiftUI, plus AppKit for the file table and text views). |
+| `scripts/make-icon.swift` | Draws the app icon into `KubeUI/Assets.xcassets`; rerun after changing it. |
 | `KubeUI.xcodeproj` | Xcode project; the `KubeUI/` folder is synchronized, so new files are picked up automatically. |
 
 ## Build and run
