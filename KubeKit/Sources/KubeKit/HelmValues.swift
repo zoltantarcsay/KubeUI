@@ -25,15 +25,24 @@ public struct ValueLayer: Sendable, Identifiable, Hashable {
     }
 }
 
-/// An env var's effective value and the layer that sets it.
-public struct EnvVar: Sendable, Identifiable, Hashable {
-    public var id: String { key }
-    public let key: String
+/// One key of the merged values, with the layer that wins it.
+public struct ValueNode: Sendable, Identifiable, Hashable {
+    public var id: String { path.joined(separator: "\u{1F}") }
+    public let path: [String]
+    public var key: String { path.last ?? "" }
+    public let kind: YAMLEdit.Kind
+    /// Display value: the unquoted scalar, a list summary, or empty for mappings.
     public let value: String
-    /// Index into the layers of the layer that wins.
+    /// The effective value as written in the winning layer (for editing).
+    public let rawValue: String
+    /// Index of the layer that wins.
     public let layer: Int
-    /// Every layer that sets this key (lower ones are overridden).
+    /// Every layer that sets this key (earlier ones are overridden, or merged for mappings).
     public let definedIn: [Int]
+    /// Nested keys of a mapping; nil for leaves (as `Table`/`OutlineGroup` expect).
+    public var children: [ValueNode]?
+
+    public var dottedPath: String { path.joined(separator: ".") }
 }
 
 public enum HelmValues {
@@ -68,49 +77,70 @@ public enum HelmValues {
         return layers
     }
 
-    /// Paths of every `env` mapping across the layers, e.g. `["demo-ops", "backend", "env"]`.
-    public static func envBlocks(_ layers: [ValueLayer]) -> [[String]] {
-        var seen: [[String]] = []
-        for layer in layers {
-            for path in YAMLEdit(layer.text).mappingPaths(named: "env") where !seen.contains(path) {
-                seen.append(path)
-            }
-        }
-        return seen
-    }
-
-    /// Effective env vars of one block: maps merge across layers, later layers win.
-    public static func env(_ block: [String], in layers: [ValueLayer]) -> [EnvVar] {
-        var values: [String: (value: String, layer: Int, definedIn: [Int])] = [:]
-        var order: [String] = []
+    /// Merges the layers the way Helm does: mappings merge key by key, scalars and lists from
+    /// later layers replace earlier ones wholesale.
+    public static func tree(_ layers: [ValueLayer]) -> [ValueNode] {
+        struct Info { var kind: YAMLEdit.Kind; var value: String; var raw: String; var layer: Int; var definedIn: [Int] }
+        var info: [[String]: Info] = [:]
+        var order: [[String]] = []
         for (i, layer) in layers.enumerated() {
-            for entry in YAMLEdit(layer.text).entries(block) {
-                if values[entry.key] == nil { order.append(entry.key) }
-                let defined = (values[entry.key]?.definedIn ?? []) + [i]
-                values[entry.key] = (entry.value, i, defined)
+            let yaml = YAMLEdit(layer.text)
+            for entry in yaml.scan() {
+                let path = entry.path
+                if entry.kind != .mapping {
+                    // A replaced value drops whatever earlier layers nested under it.
+                    for p in order where p.count > path.count && Array(p.prefix(path.count)) == path { info[p] = nil }
+                }
+                let display: String = switch entry.kind {
+                case .mapping: ""
+                case .list: entry.rawValue.isEmpty ? listSummary(yaml.body(entry)) : entry.rawValue
+                case .scalar: entry.rawValue.hasPrefix("|") || entry.rawValue.hasPrefix(">")
+                    ? yaml.body(entry).trimmingCharacters(in: .whitespacesAndNewlines) : entry.value
+                }
+                if info[path] == nil, !order.contains(path) { order.append(path) }
+                info[path] = Info(kind: entry.kind, value: display, raw: entry.rawValue, layer: i, definedIn: (info[path]?.definedIn ?? []) + [i])
             }
         }
-        return order.sorted().compactMap { key in
-            values[key].map { EnvVar(key: key, value: $0.value, layer: $0.layer, definedIn: $0.definedIn) }
+        func build(_ parent: [String]) -> [ValueNode] {
+            order.filter { $0.count == parent.count + 1 && Array($0.dropLast()) == parent && info[$0] != nil }.map { path in
+                let i = info[path]!
+                return ValueNode(path: path, kind: i.kind, value: i.value, rawValue: i.raw, layer: i.layer, definedIn: i.definedIn,
+                                 children: i.kind == .mapping ? build(path) : nil)
+            }
         }
+        return build([])
     }
 
-    /// Where an edit of `key` should go by default. The key's winning file is edited in place when it
-    /// is already specific (any value file after the first); keys coming from shared layers (chart
+    static func listSummary(_ body: String) -> String {
+        let items = body.split(separator: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("- ") || $0.trimmingCharacters(in: .whitespaces) == "-" }
+        return "[\(items.count) item\(items.count == 1 ? "" : "s")]"
+    }
+
+    /// All nodes, depth first.
+    public static func flatten(_ nodes: [ValueNode]) -> [ValueNode] {
+        nodes.flatMap { [$0] + flatten($0.children ?? []) }
+    }
+
+    static func sets(_ layer: ValueLayer, _ path: [String]) -> Bool {
+        YAMLEdit(layer.text).entry(path) != nil
+    }
+
+    /// Where an edit of `path` should go by default. The winning file is edited in place when it is
+    /// already specific (any value file after the first); values coming from shared layers (chart
     /// defaults, the first value file such as `defaults/...`) get an override in the most specific
-    /// file instead, so other tenants are unaffected. nil when inline values pin the key.
-    public static func targetLayer(for key: String, block: [String], in layers: [ValueLayer]) -> Int? {
-        let setters = layers.indices.filter { i in YAMLEdit(layers[i].text).entries(block).contains { $0.key == key } }
+    /// file instead, so other tenants are unaffected. nil when inline values pin the path.
+    public static func targetLayer(for path: [String], in layers: [ValueLayer]) -> Int? {
+        let setters = layers.indices.filter { sets(layers[$0], path) }
         if let top = setters.last, !layers[top].isEditable { return nil }
         let files = layers.indices.filter { layers[$0].origin == .valueFile && layers[$0].file != nil }
         if let top = setters.last, files.dropFirst().contains(top) { return top }
         return files.last
     }
 
-    /// Whether an inline layer sets `key`, which no values file can override.
-    public static func pinnedInline(_ key: String, block: [String], in layers: [ValueLayer]) -> ValueLayer? {
+    /// The inline layer that sets `path`, which no values file can override.
+    public static func pinnedInline(_ path: [String], in layers: [ValueLayer]) -> ValueLayer? {
         layers.last { layer in
-            if case .inline = layer.origin { return YAMLEdit(layer.text).entries(block).contains { $0.key == key } }
+            if case .inline = layer.origin { return sets(layer, path) }
             return false
         }
     }

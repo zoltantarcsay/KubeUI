@@ -51,6 +51,34 @@ import Testing
         #expect(fresh.text == "# empty\ndemo-ops:\n  backend:\n    env:\n      A: \"1\"\n")
     }
 
+    @Test func skipsKeysInsideListsAndBlockScalars() {
+        let yaml = YAMLEdit("""
+        app:
+          env:
+          - name: A
+            value: x
+          script: |
+            echo: hi
+            other: 1
+          image:
+            tag: "1.2"
+        """)
+        let paths = yaml.scan().map { $0.path.joined(separator: ".") }
+        #expect(paths == ["app", "app.env", "app.script", "app.image", "app.image.tag"])
+        #expect(yaml.entry(["app", "env"])?.kind == .list)
+        #expect(yaml.entry(["app", "script"])?.kind == .scalar)
+    }
+
+    @Test func setsLiteralsAndReplacesBlocks() {
+        var yaml = YAMLEdit("a:\n  replicas: 2\n  name: \"x\"\n  list:\n  - 1\n  - 2\nb: 1\n")
+        yaml.setLiteral(["a"], key: "replicas", literal: YAMLEdit.literal(from: "3", previous: "2"))
+        yaml.setLiteral(["a"], key: "name", literal: YAMLEdit.literal(from: "7", previous: "\"x\""))
+        yaml.setLiteral(["a"], key: "list", literal: "[]")
+        #expect(yaml.text == "a:\n  replicas: 3\n  name: \"7\"\n  list: []\nb: 1\n")
+        #expect(YAMLEdit.literal(from: "a: b", previous: nil) == "\"a: b\"")
+        #expect(YAMLEdit.literal(from: "true", previous: nil) == "true")
+    }
+
     @Test func removesKey() {
         var yaml = YAMLEdit(values)
         yaml.remove(["my-app", "backend", "env"], key: "LOG_LEVEL")
@@ -98,22 +126,33 @@ import Testing
         #expect(layers.map(\.title) == ["charts/demo-ops/values.yaml", "defaults/demo-ops-app.yaml", "clusters/c1/demo-ops/values.yaml",
                                         "clients/acme/tst/demo-ops-app.yaml", "Inline values (ApplicationSet demo-ops-application-set)"])
         #expect(layers.allSatisfy { $0.exists })
-        #expect(HelmValues.envBlocks(layers) == [["demo-ops", "backend", "env"]])
     }
 
-    @Test func mergesEnvAndPicksEditTargets() throws {
+    @Test func mergesTreeAndPicksEditTargets() throws {
         let root = try repo()
         defer { try? FileManager.default.removeItem(at: root) }
         let layers = HelmValues.layers(for: try app()) { _ in root }
-        let block = ["demo-ops", "backend", "env"]
-        let env = Dictionary(uniqueKeysWithValues: HelmValues.env(block, in: layers).map { ($0.key, $0) })
-        #expect(env["LOG_LEVEL"]?.value == "DEBUG" && env["LOG_LEVEL"]?.layer == 3 && env["LOG_LEVEL"]?.definedIn == [1, 3])
-        #expect(env["APP_SCHEMA"]?.layer == 4)
+        let nodes = Dictionary(uniqueKeysWithValues: HelmValues.flatten(HelmValues.tree(layers)).map { ($0.dottedPath, $0) })
+        let level = try #require(nodes["demo-ops.backend.env.LOG_LEVEL"])
+        #expect(level.value == "DEBUG" && level.layer == 3 && level.definedIn == [1, 3])
+        #expect(nodes["demo-ops.backend.env.APP_SCHEMA"]?.layer == 4)
+        #expect(nodes["demo-ops.backend.env"]?.kind == .mapping)
         // Specific layer edited in place; shared default gets a tenant override; new keys go to the tenant file.
-        #expect(HelmValues.targetLayer(for: "CLUSTER", block: block, in: layers) == 2)
-        #expect(HelmValues.targetLayer(for: "SHARED", block: block, in: layers) == 3)
-        #expect(HelmValues.targetLayer(for: "NEW_VAR", block: block, in: layers) == 3)
-        #expect(HelmValues.targetLayer(for: "APP_SCHEMA", block: block, in: layers) == nil)
+        let env = ["demo-ops", "backend", "env"]
+        #expect(HelmValues.targetLayer(for: env + ["CLUSTER"], in: layers) == 2)
+        #expect(HelmValues.targetLayer(for: env + ["SHARED"], in: layers) == 3)
+        #expect(HelmValues.targetLayer(for: ["demo-ops", "backend", "replicas"], in: layers) == 3)
+        #expect(HelmValues.targetLayer(for: env + ["APP_SCHEMA"], in: layers) == nil)
+    }
+
+    @Test func laterScalarOrListReplacesEarlierValue() {
+        let layers = [
+            ValueLayer(origin: .valueFile, title: "a", file: nil, exists: true, text: "x:\n  tags:\n  - a\n  - b\n  sub:\n    k: 1\n"),
+            ValueLayer(origin: .valueFile, title: "b", file: nil, exists: true, text: "x:\n  tags: [c]\n  sub: null\n"),
+        ]
+        let nodes = Dictionary(uniqueKeysWithValues: HelmValues.flatten(HelmValues.tree(layers)).map { ($0.dottedPath, $0) })
+        #expect(nodes["x.tags"]?.value == "[c]" && nodes["x.tags"]?.layer == 1)
+        #expect(nodes["x.sub.k"] == nil && nodes["x.sub"]?.value == "null")
     }
 
     @Test func detectsDeployedRevision() throws {

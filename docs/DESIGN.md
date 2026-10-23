@@ -75,10 +75,13 @@ Three interfaces (cluster, Argo CD, GitOps repo) are layered as one pipeline per
   `$values/clients/acme/prd/eu-west-1/billing-app.yaml`). `$ref/` resolves to that
   source's repo. The layers are the chart's `values.yaml`, the valueFiles in order, then inline
   `helm.values` (which wins and is shown as locked).
-- **Env vars:** every `env` mapping found across the layers is a block (e.g. `my-app.backend.env`).
-  Maps merge across layers, so each var shows the layer that wins.
+- **Structure-agnostic values:** the layers are merged into one tree the way Helm coalesces values.
+  Mappings merge key by key, and scalars and lists from later layers replace earlier ones. Each key
+  shows the layer that wins it. Nothing assumes a chart layout (`env`, aliases, etc.).
 - **Edit target:** the winning file if it's specific (any value file after the first). Otherwise the
-  last value file, as an override, so shared `defaults/` never change silently.
+  last value file, as an override, so shared `defaults/` never change silently. Scalars are edited in
+  place. Lists, block scalars and restructuring go through the raw file editor (bottom panel, YAML
+  highlighting).
 - **YAML edits are surgical** (`YAMLEdit`). They touch only the changed lines and keep comments,
   quoting and indentation, so GitOps diffs stay minimal.
 - **Git** runs the user's `git` in their clone, with their credentials. Supported: status, diff,
@@ -90,8 +93,8 @@ Three interfaces (cluster, Argo CD, GitOps repo) are layered as one pipeline per
 ## Not yet / next
 
 - Port-forwarding, edit-and-apply YAML, CRDs (generic resource discovery via `kubectl api-resources`).
-- YAML syntax highlighting in the YAML/describe viewer; image details in the pod inspector.
-- Argo CD: editing values beyond env (image tags, replicas), apps whose Applications live on a separate
+- Image details in the pod inspector.
+- Argo CD: list items in the values tree, apps whose Applications live on a separate
   control plane (e.g. a hosted Argo CD), and ApplicationSet-pinned values (link to the appset file).
 - Ephemeral debug containers for distroless images (no shell → no file browsing today).
 - Native REST transport for lists/watches if `kubectl` process count ever becomes a problem.

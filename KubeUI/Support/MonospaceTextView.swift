@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Owns an NSTextView so models can append large amounts of text without SwiftUI diffing it.
-final class TextViewController {
+final class TextViewController: NSObject, NSTextViewDelegate {
     let textView: NSTextView
     let scrollView: NSScrollView
     /// Keeps memory bounded for long-running log follows.
@@ -10,10 +10,14 @@ final class TextViewController {
     /// Styles complete lines; when set, a trailing partial line waits for the rest of it.
     var lineStyler: ((String, NSFont) -> NSAttributedString)?
     private var partialLine = ""
+    private var restyle: ((NSMutableAttributedString, NSFont) -> Void)?
+    /// Called after each user edit (editable controllers only).
+    var onEdit: (() -> Void)?
 
-    init() {
+    override init() {
         scrollView = NSTextView.scrollableTextView()
         textView = scrollView.documentView as! NSTextView
+        super.init()
         textView.isEditable = false
         textView.isRichText = false
         textView.usesFindBar = true
@@ -21,6 +25,24 @@ final class TextViewController {
         textView.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
         textView.textContainerInset = NSSize(width: 6, height: 6)
         setWraps(false)
+    }
+
+    /// Turns this into a plain-text code editor that re-highlights as the user types.
+    func makeEditable(restyle: @escaping (NSMutableAttributedString, NSFont) -> Void) {
+        self.restyle = restyle
+        textView.isEditable = true
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.delegate = self
+    }
+
+    func textDidChange(_ notification: Notification) {
+        if let restyle, let storage = textView.textStorage, let font = textView.font { restyle(storage, font) }
+        onEdit?()
     }
 
     func setWraps(_ wraps: Bool) {

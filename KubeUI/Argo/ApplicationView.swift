@@ -9,13 +9,13 @@ struct ApplicationView: View {
     let close: () -> Void
     @State private var section: Section = initialSection
 
-    enum Section: String, CaseIterable { case configuration = "Configuration", changes = "Changes", resources = "Resources" }
+    enum Section: String, CaseIterable { case values = "Values", changes = "Changes", resources = "Resources" }
 
     private static var initialSection: Section {
         #if DEBUG
         if let name = ProcessInfo.processInfo.environment["KUBEUI_APP_SECTION"], let s = Section(rawValue: name) { return s }
         #endif
-        return .configuration
+        return .values
     }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct ApplicationView: View {
             .padding(.bottom, 8)
             Divider()
             switch section {
-            case .configuration: ConfigurationView(model: model) { section = .changes }
+            case .values: ValuesView(model: model) { section = .changes }
             case .changes: ChangesView(model: model)
             case .resources: ArgoResourcesView(model: model)
             }
@@ -89,7 +89,7 @@ private struct PipelineView: View {
                 }
             }
             arrow
-            card("Argo CD", "arrow.triangle.branch", model.argoStage) { select(.configuration) } accessory: { EmptyView() }
+            card("Argo CD", "arrow.triangle.branch", model.argoStage) { select(.values) } accessory: { EmptyView() }
             arrow
             card("Cluster", "server.rack", model.clusterStage) { select(.resources) } accessory: { EmptyView() }
         }

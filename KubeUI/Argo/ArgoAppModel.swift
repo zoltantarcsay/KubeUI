@@ -33,7 +33,8 @@ final class ArgoAppModel {
     private(set) var repo: GitRepo?
     private(set) var repoURL: String?
     private(set) var layers: [ValueLayer] = []
-    var envBlock: [String]?
+    /// The effective values of all layers merged, as Helm sees them.
+    private(set) var tree: [ValueNode] = []
     private(set) var branch: String?
     private(set) var head: GitRepo.Commit?
     private(set) var changes: [GitRepo.Change] = []
@@ -178,20 +179,7 @@ final class ArgoAppModel {
     func reloadLayers() {
         guard let app else { return }
         layers = HelmValues.layers(for: application) { app.linkedRoot(for: $0) }
-        let blocks = HelmValues.envBlocks(layers)
-        if envBlock == nil || !blocks.contains(envBlock!) { envBlock = preferredBlock(blocks) }
-    }
-
-    /// Prefers the backend container's env, the common case for app config.
-    private func preferredBlock(_ blocks: [[String]]) -> [String]? {
-        blocks.first { $0.suffix(2) == ["backend", "env"] } ?? blocks.first
-    }
-
-    var envBlocks: [[String]] { HelmValues.envBlocks(layers) }
-
-    var env: [EnvVar] {
-        guard let envBlock else { return [] }
-        return HelmValues.env(envBlock, in: layers)
+        tree = HelmValues.tree(layers)
     }
 
     func refreshGit(fetch: Bool) async {
@@ -207,15 +195,30 @@ final class ArgoAppModel {
         }
     }
 
-    /// Writes an env var into a layer's file, keeping the rest of the file as it is.
-    func setEnv(_ key: String, value: String, layer index: Int) {
-        guard let envBlock else { return }
-        edit(layer: index) { $0.set(envBlock, key: key, value: value) }
+    /// Writes a YAML literal at `path` into a layer's file, keeping the rest of the file as it is.
+    func setValue(_ path: [String], literal: String, layer index: Int) {
+        edit(layer: index) { $0.setLiteral(Array(path.dropLast()), key: path.last!, literal: literal) }
     }
 
-    func removeEnv(_ key: String, layer index: Int) {
-        guard let envBlock else { return }
-        edit(layer: index) { $0.remove(envBlock, key: key) }
+    func removeValue(_ path: [String], layer index: Int) {
+        edit(layer: index) { $0.remove(Array(path.dropLast()), key: path.last!) }
+    }
+
+    /// Opens a layer's file in the bottom panel's editor (inline values open read-only).
+    func openLayer(_ index: Int) {
+        guard layers.indices.contains(index) else { return }
+        let layer = layers[index]
+        let editor: FileEditorModel
+        if let file = layer.file, layer.isEditable {
+            editor = FileEditorModel(title: layer.title, file: file) { [weak self] in
+                self?.reloadLayers()
+                Task { await self?.refreshGit(fetch: false) }
+            }
+        } else {
+            let reason = if case .inline(let owner) = layer.origin { "Set by \(owner); edit it there" } else { "Repository not linked" }
+            editor = FileEditorModel(title: layer.title, file: nil, text: layer.text, readOnlyReason: reason)
+        }
+        openPanel(.editor(editor))
     }
 
     private func edit(layer index: Int, _ change: (inout YAMLEdit) -> Void) {

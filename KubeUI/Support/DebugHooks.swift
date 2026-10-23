@@ -41,17 +41,20 @@ struct DebugHooks: ViewModifier {
         }
     }
 
-    /// `KUBEUI_ENV_SET=KEY=VALUE` edits the opened app's env like the edit sheet would;
-    /// `KUBEUI_PUSH=1` then commits and pushes, starting rollout tracking.
+    /// `KUBEUI_VALUE_SET=a.b.KEY=VALUE` edits the opened app's values like the edit sheet would;
+    /// `KUBEUI_PUSH=1` then commits and pushes; `KUBEUI_OPEN_LAYER=<n>` opens layer n in the editor.
     static func scriptRollout(_ model: ClusterModel, env: [String: String]) async {
-        guard let spec = env["KUBEUI_ENV_SET"], let eq = spec.firstIndex(of: "="), let app = model.focusedApp else { return }
+        guard let app = model.focusedApp else { return }
         for _ in 0..<40 where app.layers.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
-        let key = String(spec[..<eq]), value = String(spec[spec.index(after: eq)...])
-        guard let block = app.envBlock, let layer = HelmValues.targetLayer(for: key, block: block, in: app.layers) else { return }
-        app.setEnv(key, value: value, layer: layer)
+        if let n = env["KUBEUI_OPEN_LAYER"].flatMap(Int.init) { app.openLayer(n) }
+        guard let spec = env["KUBEUI_VALUE_SET"], let eq = spec.firstIndex(of: "=") else { return }
+        let path = spec[..<eq].split(separator: ".").map(String.init), input = String(spec[spec.index(after: eq)...])
+        let previous = HelmValues.flatten(app.tree).first { $0.path == path }?.rawValue
+        guard let layer = HelmValues.targetLayer(for: path, in: app.layers) else { return }
+        app.setValue(path, literal: YAMLEdit.literal(from: input, previous: previous), layer: layer)
         guard env["KUBEUI_PUSH"] == "1" else { return }
         try? await Task.sleep(for: .seconds(3))
-        await app.commitAndPush("\(app.application.name): set \(key)")
+        await app.commitAndPush("\(app.application.name): set \(path.last!)")
     }
 
     static func snapshotLoop(_ dir: URL) async {

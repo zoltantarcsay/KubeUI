@@ -8,18 +8,21 @@ final class PanelTab: Identifiable {
         case files(PodFilesModel)
         case logs(LogsModel)
         case text(TextModel)
+        case editor(FileEditorModel)
     }
 
     enum Request {
         case files(PodRef)
         case logs(PodRef)
         case text(TextTarget)
+        case editor(FileEditorModel)
 
         var id: String {
             switch self {
             case .files(let p): "files:\(p.context)/\(p.namespace)/\(p.pod)"
             case .logs(let p): "logs:\(p.context)/\(p.namespace)/\(p.pod)"
             case .text(let t): "\(t.mode.rawValue):\(t.context)/\(t.namespace ?? "")/\(t.kindID)/\(t.name)"
+            case .editor(let e): e.id
             }
         }
     }
@@ -54,6 +57,11 @@ final class PanelTab: Identifiable {
             title = target.name
             help = "\(target.mode == .yaml ? "YAML" : "Describe") — \(target.kindID)/\(target.name)"
             symbol = target.mode == .yaml ? "curlybraces" : "doc.text.magnifyingglass"
+        case .editor(let editor):
+            content = .editor(editor)
+            title = (editor.title as NSString).lastPathComponent
+            help = editor.title
+            symbol = editor.file == nil ? "lock.doc" : "doc.text"
         }
     }
 
@@ -61,7 +69,7 @@ final class PanelTab: Identifiable {
         switch content {
         case .files(let model): model.stop()
         case .logs(let model): model.stop()
-        case .text: break
+        case .text, .editor: break
         }
     }
 }
@@ -127,6 +135,7 @@ struct PanelArea: View {
         case .files(let files): PodFilesPanel(model: files)
         case .logs(let logs): LogsPanel(model: logs)
         case .text(let text): TextPanel(model: text)
+        case .editor(let editor): FileEditorPanel(model: editor)
         }
     }
 }

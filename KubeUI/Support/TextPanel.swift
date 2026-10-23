@@ -11,6 +11,7 @@ final class TextModel {
 
     init(target: TextTarget) {
         self.target = target
+        controller.lineStyler = YAMLHighlighter.style
     }
 
     func start(app: AppModel) {
@@ -29,7 +30,7 @@ final class TextModel {
             case .describe: try await client.describe(kind, name: target.name, namespace: target.namespace)
             }
             error = nil
-            controller.setText(text)
+            controller.setStyled(text)
         } catch {
             self.error = error.localizedDescription
         }

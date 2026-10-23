@@ -20,7 +20,7 @@ struct ChangesView: View {
                 Divider()
                 if model.changes.isEmpty {
                     ContentUnavailableView("No Local Changes", systemImage: "checkmark.circle",
-                                           description: Text("Edit configuration to change this app. Changes appear here for review."))
+                                           description: Text("Edit values to change this app. Changes appear here for review."))
                 } else {
                     HSplitView {
                         List(model.changes) { change in
@@ -112,14 +112,14 @@ struct ChangesView: View {
         .background(.bar)
     }
 
-    /// "demo-ops-app-tst: set LOG_LEVEL, APP_FLAG" from the env keys touched in the diff.
+    /// "demo-ops-app-tst: set LOG_LEVEL, replicas" from the keys added or changed in the diff.
     private var suggestedMessage: String {
         let keys = model.diff.split(separator: "\n").compactMap { line -> String? in
             guard line.hasPrefix("+"), !line.hasPrefix("+++") else { return nil }
             let body = line.dropFirst().trimmingCharacters(in: .whitespaces)
             guard let colon = body.firstIndex(of: ":") else { return nil }
             let key = String(body[..<colon])
-            return key.allSatisfy { $0.isUppercase || $0.isNumber || $0 == "_" } && !key.isEmpty ? key : nil
+            return !key.isEmpty && key.allSatisfy({ $0.isLetter || $0.isNumber || "_-.".contains($0) }) ? key : nil
         }
         let unique = keys.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         let summary = unique.isEmpty ? "update configuration" : "set " + unique.prefix(3).joined(separator: ", ") + (unique.count > 3 ? "…" : "")

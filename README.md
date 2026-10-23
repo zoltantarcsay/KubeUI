@@ -95,14 +95,18 @@ application to see it as one pipeline: **Source** (your clone) → **Argo CD** (
 
 - **Link your clone once per repo URL**, from the banner above Applications or the app's Source
   card. KubeUI uses your own `git`, credentials and SSH setup, and checks the clone's origin.
-- **Configuration** shows the app's effective env vars across its Helm value layers. These are the
-  chart's `values.yaml`, then each resolved `valueFiles` entry in order, then inline values from
-  the ApplicationSet. Each var lists the layer that sets it.
-  - Editing writes only the lines that change, keeping comments and formatting.
+- **Values** shows the app's Helm values merged across its layers, whatever the chart's structure.
+  The layers are the chart's `values.yaml`, then each resolved `valueFiles` entry in order, then
+  inline values from the ApplicationSet. Every key shows the layer that wins it. Search finds keys
+  and values anywhere in the tree.
+  - Edit or add any scalar. Typed values are written as YAML, so `3` stays a number. Only the
+    changed lines are rewritten, keeping comments and formatting.
   - Edits go where they're safe by default: the file that already sets the key when it's tenant or
     cluster specific, otherwise the most specific file, so a shared `defaults/` value gets an
     override instead of changing every tenant.
   - Keys pinned inline by an ApplicationSet are locked.
+  - Double-click a layer to edit its whole file in the bottom panel, with YAML highlighting. Use this
+    for lists and multi-line values.
 - **Changes** shows the diff. **Commit & Push** pushes to the tracked branch, asks Argo CD to
   refresh, and follows the rollout until new pods are ready. **Push as PR…** pushes a branch and
   opens GitHub's PR page; tracking then waits for the merge.
@@ -125,6 +129,6 @@ Debug builds read these environment variables, used for scripted UI checks:
 - `KUBEUI_SNAPSHOT_DIR=<dir>` writes a PNG and a view-tree dump of every window every 2 seconds.
 - `KUBEUI_OPEN=files:<namespace>/<pod>,logs:<namespace>/<pod>` opens those panel tabs at launch.
 - `KUBEUI_EXPAND=/etc,/usr` expands those folders in the last opened Files tab.
-- `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application. `KUBEUI_ENV_SET=KEY=VALUE`
-  then edits its env, and `KUBEUI_PUSH=1` commits and pushes. `KUBEUI_APP_SECTION=Changes` picks the
-  section shown first.
+- `KUBEUI_OPEN=app:<namespace>/<application>` opens an Argo CD application. `KUBEUI_VALUE_SET=a.b.KEY=VALUE`
+  then edits its values, and `KUBEUI_PUSH=1` commits and pushes. `KUBEUI_APP_SECTION=Changes` picks the
+  section shown first, and `KUBEUI_OPEN_LAYER=<n>` opens value layer n in the editor.
