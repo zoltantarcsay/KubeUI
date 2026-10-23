@@ -7,6 +7,9 @@ final class TextViewController {
     let scrollView: NSScrollView
     /// Keeps memory bounded for long-running log follows.
     var maxCharacters = 4_000_000
+    /// Styles complete lines; when set, a trailing partial line waits for the rest of it.
+    var lineStyler: ((String, NSFont) -> NSAttributedString)?
+    private var partialLine = ""
 
     init() {
         scrollView = NSTextView.scrollableTextView()
@@ -39,20 +42,41 @@ final class TextViewController {
     }
 
     func append(_ text: String) {
-        guard let storage = textView.textStorage else { return }
+        guard let storage = textView.textStorage, let font = textView.font else { return }
         let clip = scrollView.contentView
         let atBottom = clip.bounds.maxY >= (textView.frame.height - 20)
-        storage.append(NSAttributedString(string: text, attributes: [
-            .font: textView.font as Any,
-            .foregroundColor: NSColor.textColor,
-        ]))
+        if let lineStyler {
+            let combined = partialLine + text
+            guard let newline = combined.lastIndex(of: "\n") else {
+                partialLine = combined
+                return
+            }
+            partialLine = String(combined[combined.index(after: newline)...])
+            storage.append(lineStyler(String(combined[...newline]), font))
+        } else {
+            storage.append(NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.textColor]))
+        }
         if storage.length > maxCharacters {
             storage.deleteCharacters(in: NSRange(location: 0, length: storage.length - maxCharacters * 3 / 4))
         }
         if atBottom { textView.scrollToEndOfDocument(nil) }
     }
 
-    func clear() { textView.string = "" }
+    /// Writes out a held-back partial line, e.g. when the stream ends.
+    func flush() {
+        guard !partialLine.isEmpty else { return }
+        let line = partialLine
+        partialLine = ""
+        let styler = lineStyler
+        lineStyler = nil
+        append(line)
+        lineStyler = styler
+    }
+
+    func clear() {
+        textView.string = ""
+        partialLine = ""
+    }
 }
 
 struct MonospaceTextView: NSViewRepresentable {

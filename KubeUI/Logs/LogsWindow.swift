@@ -64,6 +64,7 @@ struct LogsWindow: View {
                 }
             }
             .onAppear {
+                controller.lineStyler = LogHighlighter.style
                 container = pod.containers.first
                 restart()
             }
@@ -86,6 +87,7 @@ struct LogsWindow: View {
                 for try await chunk in client.logs(pod: pod.pod, namespace: pod.namespace, container: container, tail: tail, follow: follow, previous: previous) {
                     controller.append(String(decoding: chunk, as: UTF8.self))
                 }
+                controller.flush()
             } catch is CancellationError {
             } catch {
                 if !Task.isCancelled { self.error = error.localizedDescription }
