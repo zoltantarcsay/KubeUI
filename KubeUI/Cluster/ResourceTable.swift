@@ -25,14 +25,13 @@ struct ResourceTable: View {
             menu(for: objects(ids))
         } primaryAction: { ids in
             guard let object = objects(ids).first else { return }
-            if model.kind.isPod {
-                openFiles(object)
-            } else if model.kind.isArgoApplication {
+            if model.kind.isArgoApplication {
                 model.openApplication(object)
             } else {
                 openText(object, .yaml)
             }
         }
+        .focusedSceneValue(\.resourceActions, actions(for: objects(model.selection)))
         .overlay { overlay(isEmpty: rows.isEmpty) }
         .safeAreaInset(edge: .top, spacing: 0) {
             if model.kind.isArgoApplication { RepoLinkBanner(model: model) }
@@ -145,17 +144,15 @@ struct ResourceTable: View {
                 Divider()
             }
             if model.kind.isPod, objects.count == 1 {
-                Button("Browse Files") { openFiles(first) }
-                Button("Show Logs") { openLogs(first) }
-                containerMenu("Open Shell", first) { container in
-                    if let ref = podRef(first) { model.openPanel(.shell(ref, container: container)) }
-                }
-                containerMenu("Open Shell in Terminal", first) { container in openShell(first, container: container) }
+                Button("Browse Files") { openFiles(first) }.keyboardShortcut(.browseFiles)
+                Button("Show Logs") { openLogs(first) }.keyboardShortcut(.showLogs)
+                containerMenu("Open Shell", first, shortcut: .openShell) { container in openPanelShell(first, container: container) }
+                containerMenu("Open Shell in Terminal", first, shortcut: .openShellInTerminal) { container in openShell(first, container: container) }
                 Divider()
             }
             if objects.count == 1 {
-                Button("Show YAML") { openText(first, .yaml) }
-                Button("Describe") { openText(first, .describe) }
+                Button("Show YAML") { openText(first, .yaml) }.keyboardShortcut(.showYAML)
+                Button("Describe") { openText(first, .describe) }.keyboardShortcut(.describe)
                 Divider()
             }
             if model.kind.isScalable, objects.count == 1 {
@@ -177,15 +174,28 @@ struct ResourceTable: View {
     }
 
     @ViewBuilder
-    private func containerMenu(_ title: String, _ pod: KubeObject, action: @escaping (String?) -> Void) -> some View {
+    private func containerMenu(_ title: String, _ pod: KubeObject, shortcut: KeyboardShortcut, action: @escaping (String?) -> Void) -> some View {
         let containers = pod.containerNames
         if containers.count > 1 {
             Menu(title) {
                 ForEach(containers, id: \.self) { name in Button(name) { action(name) } }
             }
         } else {
-            Button(title) { action(containers.first) }
+            Button(title) { action(containers.first) }.keyboardShortcut(shortcut)
         }
+    }
+
+    private func actions(for objects: [KubeObject]) -> ResourceActions? {
+        guard objects.count == 1, let object = objects.first else { return nil }
+        var actions = ResourceActions(showYAML: { openText(object, .yaml) }, describe: { openText(object, .describe) })
+        if model.kind.isPod {
+            actions.browseFiles = { openFiles(object) }
+            actions.showLogs = { openLogs(object) }
+            // nil lets kubectl pick the default container.
+            actions.openShell = { openPanelShell(object, container: nil) }
+            actions.openShellInTerminal = { openShell(object, container: nil) }
+        }
+        return actions
     }
 
     private func podRef(_ pod: KubeObject) -> PodRef? {
@@ -199,6 +209,10 @@ struct ResourceTable: View {
 
     private func openLogs(_ pod: KubeObject) {
         if let ref = podRef(pod) { model.openPanel(.logs(ref)) }
+    }
+
+    private func openPanelShell(_ pod: KubeObject, container: String?) {
+        if let ref = podRef(pod) { model.openPanel(.shell(ref, container: container)) }
     }
 
     private func openText(_ object: KubeObject, _ mode: TextTarget.Mode) {

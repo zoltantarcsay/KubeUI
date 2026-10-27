@@ -16,6 +16,7 @@ struct KubeUIApp: App {
             SidebarCommands()
             InspectorCommands()
             ToolbarCommands()
+            ResourceCommands()
         }
 
         Settings {

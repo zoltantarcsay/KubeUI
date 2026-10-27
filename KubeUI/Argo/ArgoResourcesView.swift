@@ -60,6 +60,7 @@ struct ArgoResourcesView: View {
             Button("Show YAML") { open(r, .yaml) }
             Button("Describe") { open(r, .describe) }
         }
+        .onTapGesture(count: 2) { open(r, .yaml) }
     }
 
     private func podRow(_ pod: KubeObject) -> some View {
@@ -86,7 +87,7 @@ struct ArgoResourcesView: View {
             Button("Open Shell") { model.openPanel(.shell(ref(pod), container: nil)) }
             Button("Show YAML") { model.openPanel(.text(TextTarget(context: model.context, kindID: "pods", name: pod.name, namespace: pod.namespace, mode: .yaml))) }
         }
-        .onTapGesture(count: 2) { model.openPanel(.logs(ref(pod))) }
+        .onTapGesture(count: 2) { model.openPanel(.text(TextTarget(context: model.context, kindID: "pods", name: pod.name, namespace: pod.namespace, mode: .yaml))) }
     }
 
     private func ref(_ pod: KubeObject) -> PodRef {
