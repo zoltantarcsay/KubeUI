@@ -85,6 +85,13 @@ final class PanelTab: Identifiable {
     }
 }
 
+/// One side-by-side pane of the bottom panel with its own tabs, like an editor group in VS Code.
+struct PanelSplit: Identifiable {
+    let id = UUID()
+    var tabIDs: [String]
+    var activeID: String
+}
+
 /// Compact bar for panel controls, sized like Xcode's debug bar.
 struct PanelBar<Content: View>: View {
     @ViewBuilder let content: Content
@@ -108,33 +115,57 @@ struct PanelArea: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            tabStrip
-            Divider()
-            if let tab = model.activePanel {
-                content(tab).id(tab.id)
-            } else {
-                Spacer()
+            HSplitView {
+                ForEach(model.panelSplits) { split in
+                    VStack(spacing: 0) {
+                        tabStrip(split)
+                        Divider()
+                        if let tab = model.panels.first(where: { $0.id == split.activeID }) {
+                            content(tab).id(tab.id)
+                        } else {
+                            Spacer()
+                        }
+                    }
+                    .frame(minWidth: 240, maxWidth: .infinity)
+                }
             }
+            // A fresh split view shares the width evenly; the old one keeps stale pane sizes.
+            .id(model.panelSplits.map(\.id))
         }
     }
 
-    private var tabStrip: some View {
-        HStack(spacing: 0) {
+    private func tabStrip(_ split: PanelSplit) -> some View {
+        let index = model.panelSplits.firstIndex { $0.id == split.id } ?? 0
+        return HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    ForEach(model.panels) { tab in
-                        PanelTabButton(tab: tab, isActive: tab.id == model.activePanelID,
-                                       select: { model.activePanelID = tab.id },
-                                       close: { model.closePanel(tab.id) })
+                    ForEach(split.tabIDs, id: \.self) { id in
+                        if let tab = model.panels.first(where: { $0.id == id }) {
+                            PanelTabButton(tab: tab, isActive: id == split.activeID,
+                                           select: { model.selectPanel(id) },
+                                           close: { model.closePanel(id) }) {
+                                Button("Split Right") { model.splitPanelRight(id) }
+                                    .disabled(!model.canSplitPanel(id))
+                                if index > 0 {
+                                    Button("Move to Left Split") { model.movePanel(id, by: -1) }
+                                }
+                                if index < model.panelSplits.count - 1 {
+                                    Button("Move to Right Split") { model.movePanel(id, by: 1) }
+                                }
+                                Divider()
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 6)
             }
-            Button { model.isPanelVisible = false } label: { Label("Hide Panel", systemImage: "chevron.down") }
-                .buttonStyle(.borderless)
-                .labelStyle(.iconOnly)
-                .help("Hide the panel (⇧⌘Y)")
-                .padding(.horizontal, 8)
+            if index == model.panelSplits.count - 1 {
+                Button { model.isPanelVisible = false } label: { Label("Hide Panel", systemImage: "chevron.down") }
+                    .buttonStyle(.borderless)
+                    .labelStyle(.iconOnly)
+                    .help("Hide the panel (⇧⌘Y)")
+                    .padding(.horizontal, 8)
+            }
         }
         .frame(height: 30)
         .background(.bar)
@@ -152,11 +183,12 @@ struct PanelArea: View {
     }
 }
 
-private struct PanelTabButton: View {
+private struct PanelTabButton<Actions: View>: View {
     let tab: PanelTab
     let isActive: Bool
     let select: () -> Void
     let close: () -> Void
+    @ViewBuilder let actions: Actions
     @State private var hovering = false
 
     var body: some View {
@@ -182,6 +214,7 @@ private struct PanelTabButton: View {
         .onHover { hovering = $0 }
         .help(tab.help)
         .contextMenu {
+            actions
             Button("Close Tab", action: close)
         }
     }

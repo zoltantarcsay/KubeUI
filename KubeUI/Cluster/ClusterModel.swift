@@ -34,7 +34,10 @@ final class ClusterModel {
 
     /// Tabs of the bottom panel (logs, files, YAML), like Xcode's debug area.
     private(set) var panels: [PanelTab] = []
-    var activePanelID: String?
+    /// Side-by-side splits of the panel, each showing its own tabs.
+    private(set) var panelSplits: [PanelSplit] = []
+    /// The last selected tab; its split is where new tabs open.
+    private(set) var activePanelID: String?
     var isPanelVisible = false
 
     /// Whether this cluster serves Argo CD's API; adds the Argo CD sidebar section.
@@ -198,18 +201,70 @@ final class ClusterModel {
         if !panels.contains(where: { $0.id == request.id }) {
             guard let app else { return }
             panels.append(PanelTab(request, app: app))
+            if let s = splitIndex(of: activePanelID) {
+                panelSplits[s].tabIDs.append(request.id)
+            } else {
+                panelSplits.append(PanelSplit(tabIDs: [request.id], activeID: request.id))
+            }
         }
-        activePanelID = request.id
+        selectPanel(request.id)
         isPanelVisible = true
+    }
+
+    func selectPanel(_ id: String) {
+        guard let s = splitIndex(of: id) else { return }
+        panelSplits[s].activeID = id
+        activePanelID = id
     }
 
     func closePanel(_ id: String) {
         guard let index = panels.firstIndex(where: { $0.id == id }) else { return }
         panels[index].stop()
         panels.remove(at: index)
+        let s = detachPanel(id)
         if activePanelID == id {
-            activePanelID = panels.isEmpty ? nil : panels[min(index, panels.count - 1)].id
+            activePanelID = panelSplits.isEmpty ? nil : panelSplits[min(s ?? 0, panelSplits.count - 1)].activeID
         }
         if panels.isEmpty { isPanelVisible = false }
+    }
+
+    static let maxPanelSplits = 3
+
+    /// Splitting moves the tab rather than copying it, so a pod never streams logs twice.
+    func canSplitPanel(_ id: String) -> Bool {
+        panelSplits.count < Self.maxPanelSplits && (splitIndex(of: id).map { panelSplits[$0].tabIDs.count } ?? 0) > 1
+    }
+
+    func splitPanelRight(_ id: String) {
+        guard canSplitPanel(id), let s = detachPanel(id) else { return }
+        panelSplits.insert(PanelSplit(tabIDs: [id], activeID: id), at: s + 1)
+        activePanelID = id
+    }
+
+    /// Moves the tab to the split `offset` places away; a split left empty closes.
+    func movePanel(_ id: String, by offset: Int) {
+        guard let s = splitIndex(of: id), panelSplits.indices.contains(s + offset) else { return }
+        let target = panelSplits[s + offset].id
+        detachPanel(id)
+        guard let t = panelSplits.firstIndex(where: { $0.id == target }) else { return }
+        panelSplits[t].tabIDs.append(id)
+        selectPanel(id)
+    }
+
+    func splitIndex(of id: String?) -> Int? {
+        panelSplits.firstIndex { $0.tabIDs.contains(id ?? "") }
+    }
+
+    /// Removes the tab from its split, closing the split once empty; returns the split's index.
+    @discardableResult
+    private func detachPanel(_ id: String) -> Int? {
+        guard let s = splitIndex(of: id), let i = panelSplits[s].tabIDs.firstIndex(of: id) else { return nil }
+        panelSplits[s].tabIDs.remove(at: i)
+        if panelSplits[s].tabIDs.isEmpty {
+            panelSplits.remove(at: s)
+        } else if panelSplits[s].activeID == id {
+            panelSplits[s].activeID = panelSplits[s].tabIDs[min(i, panelSplits[s].tabIDs.count - 1)]
+        }
+        return s
     }
 }
