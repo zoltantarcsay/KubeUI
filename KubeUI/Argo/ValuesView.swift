@@ -6,10 +6,10 @@ import SwiftUI
 /// layer that wins it and can be edited there; any layer opens as a file for free-form edits.
 struct ValuesView: View {
     let model: ArgoAppModel
-    let showChanges: () -> Void
     @State private var selection: ValueNode.ID?
     @State private var search = DebugHooks.valuesSearch
     @State private var editing: ValueEdit?
+    @FocusState private var editingInline: ValueNode.ID?
 
     struct ValueEdit: Identifiable {
         let id = UUID()
@@ -37,7 +37,7 @@ struct ValuesView: View {
                 layerList.frame(minWidth: 240, idealWidth: 300, maxWidth: 440)
             }
             .sheet(item: $editing) { edit in
-                ValueEditSheet(model: model, edit: edit, showChanges: showChanges) { editing = nil }
+                ValueEditSheet(model: model, edit: edit) { editing = nil }
             }
         }
     }
@@ -66,12 +66,17 @@ struct ValuesView: View {
                 Spacer()
                 Button { add(under: selected) } label: { Label("Add Key", systemImage: "plus") }
                     .help(addHelp)
+                Button { if let n = selected { model.removeValue(n.path, layer: n.layer) } } label: { Label("Remove Key", systemImage: "minus") }
+                    .disabled(!canRemove(selected))
+                    .help(selected.map { "Remove \($0.key) from \(layerName($0.layer))" } ?? "Remove the selected key")
                 Button { if let n = selected { edit(n) } } label: { Label("Edit", systemImage: "pencil") }
                     .disabled(selected == nil || selected?.kind == .mapping)
                     .help("Edit the selected value")
                 Button { if let n = selected { model.openLayer(n.layer) } } label: { Label("Open Layer", systemImage: "doc.text") }
                     .disabled(selected == nil)
                     .help("Open the file that sets the selected value")
+                Button { model.openPanel(.diff(model)) } label: { Label("Show Changes", systemImage: "plus.forwardslash.minus") }
+                    .help("Show uncommitted changes in the bottom panel")
             }
             Divider()
             Table(rows, children: \.children, selection: $selection) {
@@ -85,12 +90,18 @@ struct ValuesView: View {
                 }
                 .width(min: 160, ideal: 280)
                 TableColumn("Value") { n in
+                    if let layer = inlineLayer(n) {
+                        InlineValueField(id: n.id, value: n.value, focus: $editingInline) {
+                            model.setValue(n.path, literal: YAMLEdit.literal(from: $0, previous: n.rawValue), layer: layer)
+                        }
+                    } else {
                     Text(display(n))
                         .font(.body.monospaced())
                         .foregroundStyle(n.kind == .scalar ? .primary : .secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
+                    }
                 }
                 .width(min: 100, ideal: 220)
                 TableColumn("Set In") { n in
@@ -121,10 +132,13 @@ struct ValuesView: View {
 
     @ViewBuilder
     private func menu(_ n: ValueNode) -> some View {
-        if n.kind != .mapping { Button("Edit…") { edit(n) } }
+        if n.kind != .mapping {
+            Button("Edit") { edit(n) }
+            Button("Edit in Layer…") { editInSheet(n) }
+        }
         if n.kind == .mapping { Button("Add Key Here…") { add(under: n) } }
         Button("Open \(layerName(n.layer))") { model.openLayer(n.layer) }
-        if model.layers[safe: n.layer]?.isEditable == true {
+        if canRemove(n) {
             Button("Remove from \(layerName(n.layer))") { model.removeValue(n.path, layer: n.layer) }
         }
         Divider()
@@ -215,17 +229,63 @@ struct ValuesView: View {
         editing = ValueEdit(parent: parent, key: "", value: "", layer: layer, previousRaw: nil, isNew: true)
     }
 
+    /// The layer a plain scalar is typed into in place; nil for values that need the sheet or the file.
+    private func inlineLayer(_ n: ValueNode) -> Int? {
+        guard n.kind == .scalar, !n.rawValue.hasPrefix("|"), !n.rawValue.hasPrefix(">") else { return nil }
+        return HelmValues.targetLayer(for: n.path, in: model.layers)
+    }
+
+    private func canRemove(_ n: ValueNode?) -> Bool {
+        n.map { model.layers[safe: $0.layer]?.isEditable == true } ?? false
+    }
+
     private func edit(_ n: ValueNode) {
+        if inlineLayer(n) != nil {
+            editingInline = n.id
+        } else {
+            editInSheet(n)
+        }
+    }
+
+    private func editInSheet(_ n: ValueNode) {
         let layer = HelmValues.targetLayer(for: n.path, in: model.layers) ?? n.layer
         let value = n.kind == .scalar && !(n.rawValue.hasPrefix("|") || n.rawValue.hasPrefix(">")) ? n.value : ""
         editing = ValueEdit(parent: Array(n.path.dropLast()), key: n.key, value: value, layer: layer, previousRaw: n.rawValue, isNew: false)
     }
 }
 
+/// A value cell you type into: Return or clicking away saves, Escape reverts.
+private struct InlineValueField: View {
+    let id: ValueNode.ID
+    let value: String
+    let focus: FocusState<ValueNode.ID?>.Binding
+    let commit: (String) -> Void
+    @State private var text = ""
+
+    var body: some View {
+        TextField("Value", text: $text)
+            .labelsHidden()
+            .textFieldStyle(.plain)
+            .font(.body.monospaced())
+            .focused(focus, equals: id)
+            .onAppear { text = value }
+            .onChange(of: value) { text = value }
+            .onSubmit(save)
+            .onChange(of: focus.wrappedValue == id) { _, focused in if !focused { save() } }
+            .onExitCommand {
+                text = value
+                focus.wrappedValue = nil
+            }
+    }
+
+    private func save() {
+        if text != value { commit(text) }
+    }
+}
+
 private struct ValueEditSheet: View {
     let model: ArgoAppModel
     @State var edit: ValuesView.ValueEdit
-    let showChanges: () -> Void
     let dismiss: () -> Void
 
     var body: some View {
@@ -265,7 +325,6 @@ private struct ValueEditSheet: View {
                     Button("Save") {
                         model.setValue(path, literal: YAMLEdit.literal(from: edit.value, previous: edit.previousRaw), layer: edit.layer)
                         dismiss()
-                        showChanges()
                     }
                     .disabled(key.isEmpty || pinned != nil)
                 }

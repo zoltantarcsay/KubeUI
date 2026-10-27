@@ -137,6 +137,26 @@ struct ChangesView: View {
     }
 }
 
+/// The app's uncommitted diff in the bottom panel, so it stays in view while values are edited.
+struct DiffPanel: View {
+    let model: ArgoAppModel
+    @State private var diffView = TextViewController()
+
+    var body: some View {
+        MonospaceTextView(controller: diffView)
+            .overlay {
+                if model.diff.isEmpty {
+                    ContentUnavailableView("No Local Changes", systemImage: "checkmark.circle").background(.background)
+                }
+            }
+            .onAppear {
+                diffView.lineStyler = DiffHighlighter.style
+                diffView.setStyled(model.diff)
+            }
+            .onChange(of: model.diff) { diffView.setStyled(model.diff) }
+    }
+}
+
 /// Colours unified diff output.
 enum DiffHighlighter {
     static func style(_ text: String, font: NSFont) -> NSAttributedString {

@@ -34,10 +34,17 @@ struct ApplicationView: View {
             .fixedSize()
             .padding(.bottom, 8)
             Divider()
-            switch section {
-            case .values: ValuesView(model: model) { section = .changes }
-            case .changes: ChangesView(model: model)
-            case .resources: ArgoResourcesView(model: model)
+            ZStack {
+                // Kept alive so its expanded rows, search and selection survive switching sections.
+                ValuesView(model: model)
+                    .opacity(section == .values ? 1 : 0)
+                    .allowsHitTesting(section == .values)
+                    .accessibilityHidden(section != .values)
+                switch section {
+                case .values: EmptyView()
+                case .changes: ChangesView(model: model)
+                case .resources: ArgoResourcesView(model: model)
+                }
             }
         }
         .alert("Something went wrong", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } })) {

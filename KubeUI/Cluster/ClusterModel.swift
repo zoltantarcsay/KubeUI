@@ -190,6 +190,8 @@ final class ClusterModel {
     }
 
     func closeApplication() {
+        // The diff tab holds this app's model, which stops updating once closed.
+        if let focusedApp { closePanel(PanelTab.Request.diff(focusedApp).id) }
         focusedApp?.stop()
         focusedApp = nil
     }

@@ -10,6 +10,7 @@ final class PanelTab: Identifiable {
         case text(TextModel)
         case editor(FileEditorModel)
         case shell(ShellModel)
+        case diff(ArgoAppModel)
     }
 
     enum Request {
@@ -18,6 +19,7 @@ final class PanelTab: Identifiable {
         case text(TextTarget)
         case editor(FileEditorModel)
         case shell(PodRef, container: String?)
+        case diff(ArgoAppModel)
 
         var id: String {
             switch self {
@@ -26,6 +28,7 @@ final class PanelTab: Identifiable {
             case .text(let t): "\(t.mode.rawValue):\(t.context)/\(t.namespace ?? "")/\(t.kindID)/\(t.name)"
             case .editor(let e): e.id
             case .shell(let p, let c): "shell:\(p.context)/\(p.namespace)/\(p.pod)/\(c ?? "")"
+            case .diff(let a): "diff:\(a.context)/\(a.application.namespace)/\(a.application.name)"
             }
         }
     }
@@ -72,6 +75,11 @@ final class PanelTab: Identifiable {
             title = pod.containers.count > 1 ? "\(pod.pod) (\(shell.container ?? ""))" : pod.pod
             help = "Shell — \(pod.pod) in \(pod.namespace) (\(shortContextName(pod.context)))"
             symbol = "terminal"
+        case .diff(let argo):
+            content = .diff(argo)
+            title = argo.application.name
+            help = "Uncommitted changes — \(argo.application.name)"
+            symbol = "plus.forwardslash.minus"
         }
     }
 
@@ -80,7 +88,7 @@ final class PanelTab: Identifiable {
         case .files(let model): model.stop()
         case .logs(let model): model.stop()
         case .shell(let model): model.stop()
-        case .text, .editor: break
+        case .text, .editor, .diff: break
         }
     }
 }
@@ -179,6 +187,7 @@ struct PanelArea: View {
         case .text(let text): TextPanel(model: text)
         case .editor(let editor): FileEditorPanel(model: editor)
         case .shell(let shell): ShellPanel(model: shell)
+        case .diff(let argo): DiffPanel(model: argo)
         }
     }
 }

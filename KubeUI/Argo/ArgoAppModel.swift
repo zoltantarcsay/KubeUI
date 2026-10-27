@@ -194,10 +194,18 @@ final class ArgoAppModel {
     /// Writes a YAML literal at `path` into a layer's file, keeping the rest of the file as it is.
     func setValue(_ path: [String], literal: String, layer index: Int) {
         edit(layer: index) { $0.setLiteral(Array(path.dropLast()), key: path.last!, literal: literal) }
+        revealDiff()
     }
 
     func removeValue(_ path: [String], layer index: Int) {
         edit(layer: index) { $0.remove(Array(path.dropLast()), key: path.last!) }
+        revealDiff()
+    }
+
+    /// Opens the diff tab on the first edit; later edits leave the panel shown or hidden as the user set it.
+    private func revealDiff() {
+        guard let cluster, !cluster.panels.contains(where: { $0.id == PanelTab.Request.diff(self).id }) else { return }
+        openPanel(.diff(self))
     }
 
     /// Opens a layer's file in the bottom panel's editor (inline values open read-only).
